@@ -661,3 +661,126 @@ If it's thrown during a **Filament Request**, the `FilamentRenderer` will pop up
 Meanwhile, your `LogReporter` or Sentry will still receive the raw, developer-friendly message: `"Inventory count mismatch in DB"`. 
 
 This completely separates what the **developer** sees from what the **user** sees, keeping your UI clean and your logs informative.
+
+---
+
+## 🧩 Custom Detectors, Renderers, and Reporters
+
+The package is built on a strict Strategy pattern, making it infinitely extensible without modifying the core files. You can create your own Detectors, Renderers, and Reporters.
+
+### 1. Creating a Custom Detector and Renderer
+
+Let's say you have a custom mobile app that sends a specific `X-Mobile-App` header, and you want to return a highly specialized XML response for it.
+
+First, implement the `ContextDetectorInterface`:
+
+```php
+namespace App\Exceptions\Handlers;
+
+use Illuminate\Http\Request;
+use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
+use Throwable;
+
+class MobileAppDetector implements ContextDetectorInterface
+{
+    public function detect(Throwable $e, Request $request): bool
+    {
+        return $request->hasHeader('X-Mobile-App');
+    }
+}
+```
+
+Next, implement the `ExceptionRendererInterface`:
+
+```php
+namespace App\Exceptions\Handlers;
+
+use Illuminate\Http\Request;
+use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
+use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
+
+class MobileAppRenderer implements ExceptionRendererInterface
+{
+    public function render(Throwable $e, Request $request): ?Response
+    {
+        $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
+        $code = ExceptionInspector::httpCode($e);
+
+        $xml = "<error><code>{$code}</code><message>{$message}</message></error>";
+
+        return response($xml, $code)->header('Content-Type', 'application/xml');
+    }
+}
+```
+
+### 2. Creating a Custom Reporter
+
+If you want to send errors to a proprietary internal tracking system, implement the `ErrorReporterInterface`:
+
+```php
+namespace App\Exceptions\Handlers;
+
+use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Throwable;
+
+class InternalTrackerReporter implements ErrorReporterInterface
+{
+    public function shouldReport(Throwable $e): bool
+    {
+        // Don't track 404s in the internal system
+        return \Isaidgitmenow\LaravelErrors\ExceptionInspector::httpCode($e) !== 404;
+    }
+
+    public function report(Throwable $e): bool
+    {
+        // Send to your internal API
+        Http::post('https://internal.tracker/api/errors', [
+            'error' => $e->getMessage(),
+            'context' => \Isaidgitmenow\LaravelErrors\ExceptionInspector::context($e),
+        ]);
+
+        return true; // Continue the reporting pipeline
+    }
+}
+```
+
+### 3. Registering the Extensions
+
+You can inject your custom logic into the pipeline dynamically. The best place to do this is in the `boot` method of your `AppServiceProvider` (or a dedicated service provider).
+
+Resolve the `ErrorManager` from the container and prepend your classes:
+
+```php
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Isaidgitmenow\LaravelErrors\ErrorManager;
+use App\Exceptions\Handlers\MobileAppDetector;
+use App\Exceptions\Handlers\MobileAppRenderer;
+use App\Exceptions\Handlers\InternalTrackerReporter;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        $this->app->resolving(ErrorManager::class, function (ErrorManager $manager) {
+            
+            // 1. Add Custom Context (Detector + Renderer)
+            // It will be evaluated BEFORE the default ones (like API or Web)
+            $manager->addContext(
+                detector: MobileAppDetector::class, 
+                renderer: MobileAppRenderer::class
+            );
+
+            // 2. Add Custom Reporter
+            // It will run alongside LogReporter and DebugbarReporter
+            $manager->addReporter(InternalTrackerReporter::class);
+
+        });
+    }
+}
+```
+
+That's it! Your mobile app now receives perfectly formatted XML errors, and your internal tracker receives sanitized error payloads automatically.
