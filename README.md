@@ -1283,3 +1283,21 @@ The moment you run `throw new OrderFailedException(...)`:
    - If it came from a **Queue Job**, the job is marked as failed (and no HTTP response is rendered).
 
 All of this happens instantly, with zero boilerplate in your controllers!
+
+---
+
+## 🕵️‍♂️ How Does It Know the Request Context?
+
+You might be wondering: *"When an exception is thrown, how does the package know whether to return an Inertia modal, a Filament toast, or a standard JSON response?"*
+
+The package uses a pipeline of **Context Detectors** configured in `config/errors.php`. When an exception hits the `ErrorManager`, it passes the current HTTP `Request` through these detectors from top to bottom. The first one that returns `true` wins!
+
+Here is how the default detectors work:
+
+1. **`FilamentDetector`**: Inspects the URL path to see if it matches your Filament admin panel prefix (e.g., `/admin/*`).
+2. **`LivewireDetector`**: Checks if the request contains the `X-Livewire: true` header.
+3. **`InertiaDetector`**: Checks if the request contains the `X-Inertia: true` header.
+4. **`ApiDetector`**: Checks if the request expects JSON (`$request->wantsJson()`) or if the URL path starts with `/api/*`.
+5. **`WebDetector`**: The ultimate fallback. Always returns `true` and defers rendering back to standard Laravel Blade views.
+
+Because this detection is dynamic and based entirely on the HTTP Request headers and paths, **you can throw the exact same exception class from a background Job, an API Controller, or a Filament Action**, and the package will perfectly adapt the visual response to the user's environment!
