@@ -1301,3 +1301,81 @@ Here is how the default detectors work:
 5. **`WebDetector`**: The ultimate fallback. Always returns `true` and defers rendering back to standard Laravel Blade views.
 
 Because this detection is dynamic and based entirely on the HTTP Request headers and paths, **you can throw the exact same exception class from a background Job, an API Controller, or a Filament Action**, and the package will perfectly adapt the visual response to the user's environment!
+
+---
+
+## 🏗️ Building a Custom Detector (Step-by-Step)
+
+If you are building a specific client (like a mobile iOS app) and you want to format errors in a highly specific way just for that client, you can inject a new Detector into the pipeline.
+
+### 1. Create the Detector
+Implement `ContextDetectorInterface` to detect your custom environment.
+
+```php
+namespace App\Exceptions\Handlers;
+
+use Illuminate\Http\Request;
+use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
+use Throwable;
+
+class IosAppDetector implements ContextDetectorInterface
+{
+    public function detect(Throwable $e, Request $request): bool
+    {
+        // For example, looking for a specific header sent by the iOS app
+        return $request->hasHeader('X-iOS-App');
+    }
+}
+```
+
+### 2. Create the Renderer
+Implement `ExceptionRendererInterface` to format the response when the detector matches.
+
+```php
+namespace App\Exceptions\Handlers;
+
+use Illuminate\Http\Request;
+use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
+
+class IosAppRenderer implements ExceptionRendererInterface
+{
+    public function render(Throwable $e, Request $request): ?Response
+    {
+        return response()->json([
+            'ios_alert_title' => 'Error',
+            'ios_alert_body' => $e->getMessage()
+        ], 500);
+    }
+}
+```
+
+### 3. Register the Pipeline
+Bind them together in your `AppServiceProvider`.
+
+```php
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Isaidgitmenow\LaravelErrors\ErrorManager;
+use App\Exceptions\Handlers\IosAppDetector;
+use App\Exceptions\Handlers\IosAppRenderer;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        $this->app->resolving(ErrorManager::class, function (ErrorManager $manager) {
+            
+            // Add your custom context. 
+            // It will be evaluated BEFORE the default ones (like API or Web).
+            $manager->addContext(
+                detector: IosAppDetector::class, 
+                renderer: IosAppRenderer::class
+            );
+            
+        });
+    }
+}
+```
