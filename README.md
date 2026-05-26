@@ -784,3 +784,105 @@ class AppServiceProvider extends ServiceProvider
 ```
 
 That's it! Your mobile app now receives perfectly formatted XML errors, and your internal tracker receives sanitized error payloads automatically.
+
+---
+
+## 💬 Slack Integration Example
+
+This package integrates perfectly with Laravel's native logging system, meaning sending errors to Slack is incredibly easy.
+
+### 1. Configure the Webhook
+Make sure you have set the webhook URL in your `.env` file. The `slack` channel is already pre-configured in Laravel's `config/logging.php`.
+
+```env
+LOG_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+### 2. Attach the Attribute
+Simply add the `#[ReportTo('slack')]` attribute to any exception you want to send to Slack. 
+
+```php
+namespace App\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+
+#[ReportTo('slack')]
+class CriticalPaymentException extends Exception
+{
+    // ...
+}
+```
+
+The `LogReporter` will automatically detect the attribute and route the exception through `Log::channel('slack')->error(...)`. You can even route to multiple channels simultaneously using `#[ReportTo(['slack', 'daily'])]`.
+
+---
+
+## 🦉 NightWatch Integration Example
+
+If you are using NightWatch (or another external/internal tracking system), you can easily integrate it by creating a custom Reporter.
+
+### 1. Create the Reporter
+Create a new class that implements `Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface`.
+
+```php
+namespace App\Exceptions\Reporters;
+
+use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+use Illuminate\Support\Facades\Http;
+use Throwable;
+
+class NightWatchReporter implements ErrorReporterInterface
+{
+    public function shouldReport(Throwable $e): bool
+    {
+        // Define when NightWatch should ignore the exception.
+        // E.g., Don't send 404 Not Found errors to NightWatch.
+        return ExceptionInspector::httpCode($e) !== 404;
+    }
+
+    public function report(Throwable $e): bool
+    {
+        // Extract context added via #[WithContext]
+        $context = ExceptionInspector::context($e);
+
+        // Send the error to NightWatch via their API
+        Http::withToken(config('services.nightwatch.token'))
+            ->post('https://api.nightwatch.io/v1/errors', [
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'context' => $context, // This context is already sanitized!
+            ]);
+
+        // Return true to allow other reporters (like LogReporter) to also run
+        return true; 
+    }
+}
+```
+
+### 2. Register the Reporter
+To enable your `NightWatchReporter`, register it in the `boot` method of your `AppServiceProvider`.
+
+```php
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Isaidgitmenow\LaravelErrors\ErrorManager;
+use App\Exceptions\Reporters\NightWatchReporter;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        $this->app->resolving(ErrorManager::class, function (ErrorManager $manager) {
+            // Register NightWatch to run alongside the default LogReporter
+            $manager->addReporter(NightWatchReporter::class);
+        });
+    }
+}
+```
+
+Now, any exception thrown in your application will be automatically intercepted, sanitized, and sent to NightWatch!
