@@ -1,0 +1,231 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Isaidgitmenow\LaravelErrors;
+
+use Isaidgitmenow\LaravelErrors\Attributes\DontReport;
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+use ReflectionClass;
+use Throwable;
+
+/**
+ * Inspects a Throwable to extract metadata defined via PHP 8 Attributes.
+ *
+ * It recursively traverses the exception chain via getPrevious() to find
+ * attributes even on exceptions wrapped by Laravel (e.g. QueryException, ViewException).
+ *
+ * Results are statically cached per-request to avoid repeated Reflection overhead.
+ */
+final class ExceptionInspector
+{
+    /**
+     * Per-request static cache: class FQCN => extracted attribute data.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private static array $cache = [];
+
+    /**
+     * Resolve the "origin" exception - the deepest non-framework exception in the chain
+     * that carries our custom attributes, or the root if none found.
+     */
+    public static function origin(Throwable $e): Throwable
+    {
+        $candidate = $e;
+        $current = $e;
+
+        while ($current !== null) {
+            if (static::hasAnyAttribute($current)) {
+                $candidate = $current;
+            }
+            $current = $current->getPrevious();
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * Get the HTTP status code for the exception.
+     * Checks #[HttpCode] attribute, then getCode() if in valid HTTP range.
+     */
+    public static function httpCode(Throwable $e): int
+    {
+        $origin = static::origin($e);
+        $attrs = static::attributes($origin);
+
+        if (isset($attrs['http_code'])) {
+            return $attrs['http_code'];
+        }
+
+        $code = $origin->getCode();
+
+        if (is_int($code) && $code >= 400 && $code < 600) {
+            return $code;
+        }
+
+        return 500;
+    }
+
+    /**
+     * Determine if this exception should NOT be reported to external services.
+     */
+    public static function shouldNotReport(Throwable $e): bool
+    {
+        return static::attributes(static::origin($e))['dont_report'] ?? false;
+    }
+
+    /**
+     * Get the target reporting channels, if any.
+     *
+     * @return string[]|null
+     */
+    public static function reportToChannels(Throwable $e): ?array
+    {
+        $channels = static::attributes(static::origin($e))['report_to'] ?? null;
+
+        if ($channels === null) {
+            return null;
+        }
+
+        return is_array($channels) ? $channels : [$channels];
+    }
+
+    /**
+     * Get the translated frontend message for this exception, if any.
+     */
+    public static function translatedMessage(Throwable $e): ?string
+    {
+        $origin = static::origin($e);
+        $key = static::attributes($origin)['translated_message'] ?? null;
+
+        if ($key === null) {
+            return null;
+        }
+
+        $translated = trans($key);
+
+        // Only return if translation was found (not just echoing back the key)
+        return $translated !== $key ? $translated : null;
+    }
+
+    /**
+     * Extract contextual data from the exception's public properties as defined
+     * by the #[WithContext] attribute.
+     *
+     * @return array<string, mixed>
+     */
+    public static function context(Throwable $e): array
+    {
+        $origin = static::origin($e);
+        $properties = static::attributes($origin)['with_context'] ?? [];
+        $context = [];
+
+        foreach ($properties as $property) {
+            if (property_exists($origin, $property)) {
+                $context[$property] = $origin->{$property};
+            }
+        }
+
+        return $context;
+    }
+
+    /**
+     * Get the rate limit configuration for this exception, if any.
+     */
+    public static function rateLimit(Throwable $e): ?RateLimit
+    {
+        return static::attributes(static::origin($e))['rate_limit'] ?? null;
+    }
+
+    /**
+     * Check if the exception (or any in its chain) has at least one of our custom attributes.
+     */
+    private static function hasAnyAttribute(Throwable $e): bool
+    {
+        $reflection = new ReflectionClass($e);
+        $ourAttributes = [
+            HttpCode::class,
+            DontReport::class,
+            ReportTo::class,
+            TranslatedMessage::class,
+            WithContext::class,
+            RateLimit::class,
+        ];
+
+        foreach ($ourAttributes as $attributeClass) {
+            if (!empty($reflection->getAttributes($attributeClass))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Extract and cache all attributes from the exception's class.
+     *
+     * @return array<string, mixed>
+     */
+    private static function attributes(Throwable $e): array
+    {
+        $class = $e::class;
+
+        if (isset(static::$cache[$class])) {
+            return static::$cache[$class];
+        }
+
+        $reflection = new ReflectionClass($e);
+        $data = [];
+
+        // #[HttpCode]
+        $httpCodeAttrs = $reflection->getAttributes(HttpCode::class);
+        if (!empty($httpCodeAttrs)) {
+            $data['http_code'] = $httpCodeAttrs[0]->newInstance()->code;
+        }
+
+        // #[DontReport]
+        $dontReportAttrs = $reflection->getAttributes(DontReport::class);
+        if (!empty($dontReportAttrs)) {
+            $data['dont_report'] = true;
+        }
+
+        // #[ReportTo]
+        $reportToAttrs = $reflection->getAttributes(ReportTo::class);
+        if (!empty($reportToAttrs)) {
+            $data['report_to'] = $reportToAttrs[0]->newInstance()->channels;
+        }
+
+        // #[TranslatedMessage]
+        $translatedAttrs = $reflection->getAttributes(TranslatedMessage::class);
+        if (!empty($translatedAttrs)) {
+            $data['translated_message'] = $translatedAttrs[0]->newInstance()->key;
+        }
+
+        // #[WithContext]
+        $withContextAttrs = $reflection->getAttributes(WithContext::class);
+        if (!empty($withContextAttrs)) {
+            $data['with_context'] = $withContextAttrs[0]->newInstance()->properties;
+        }
+
+        // #[RateLimit]
+        $rateLimitAttrs = $reflection->getAttributes(RateLimit::class);
+        if (!empty($rateLimitAttrs)) {
+            $data['rate_limit'] = $rateLimitAttrs[0]->newInstance();
+        }
+
+        return static::$cache[$class] = $data;
+    }
+
+    /**
+     * Flush the static cache. Used in tests to prevent state leaking between runs.
+     */
+    public static function flushCache(): void
+    {
+        static::$cache = [];
+    }
+}
