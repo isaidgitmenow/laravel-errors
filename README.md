@@ -1694,9 +1694,209 @@ Here is the complete list and *why* they are bypassed:
 7. **`\Illuminate\Http\Exceptions\HttpResponseException::class`**
    - **Why:** An internal Laravel exception used to abruptly halt execution and return a raw Response object. Must be bypassed.
 
-### Interacting with Pass-Through Exceptions
+### Interacting with Pass-Through Exceptions (Injecting Custom Logic)
 
-If you want the package to intercept *any* of the native exceptions above, you have full control! 
+If you have a strict requirement to log or customize the response of a native Laravel exception, you have full control!
 
-Just open `config/errors.php` and **delete** the class from the `pass_through` array. 
-Once removed, the `ErrorManager` will catch it, evaluate your Custom Context Detectors, run your Reporters (like Slack or Sentry), and finally render it using your preferred `ApiRenderer` or `LivewireRenderer`!
+Because you cannot add PHP 8 Attributes directly to native classes (like `ModelNotFoundException`), the most elegant way to handle them is to **catch them and translate them into your own Decorated Exceptions**.
+
+Here is the step-by-step example for all native errors:
+
+#### Step 1: Remove the Exception from `pass_through`
+First, open `config/errors.php` and delete the exception you want to intercept (e.g., `ModelNotFoundException`) from the `pass_through` array.
+
+#### Step 2: Create a Decorated Exception
+Create a custom exception that extends `Exception` (or the native exception) and add your package attributes:
+
+```php
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
+
+#[HttpCode(404)]
+#[ReportTo('slack')] // We want Slack to know when a model is not found!
+#[TranslatedMessage('The requested resource could not be found.')]
+class CustomResourceNotFoundException extends Exception {}
+```
+
+#### Step 3: Translate it in `bootstrap/app.php`
+Use Laravel's `renderable` hook to catch the native exception and throw your decorated one *before* it hits the package pipeline:
+
+```php
+// bootstrap/app.php
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Auth\Access\AuthorizationException;
+
+->withExceptions(function (Exceptions $exceptions) {
+    
+    // Example 1: Translating a Model Not Found Error
+    $exceptions->renderable(function (ModelNotFoundException $e) {
+        throw new CustomResourceNotFoundException('Model missing: ' . $e->getModel());
+    });
+
+    // Example 2: Translating a 403 Gate/Policy Error
+    $exceptions->renderable(function (AuthorizationException $e) {
+        throw new CustomSecurityBreachException('Unauthorized access attempt!');
+    });
+
+    // Finally, load the package
+    \Isaidgitmenow\LaravelErrors\ErrorHandler::handle($exceptions);
+})
+```
+
+**Why is this brilliant?** 
+Because `ErrorHandler::handle($exceptions)` runs *after* your `renderable` callbacks, the package will immediately catch your newly thrown `CustomResourceNotFoundException`. It will see the `#[ReportTo('slack')]` attribute, send the notification to your Slack channel, evaluate the Context Detectors, and return a perfectly formatted 404 Inertia Modal or API JSON response! 
+
+This pattern works universally for **any** of the 7 pass-through exceptions listed above.
+
+---
+
+## 🤯 Exotic Use Cases & Advanced Patterns
+
+Because the package separates **Context Detection**, **Rendering**, and **Reporting**, you can use it to build incredibly advanced, enterprise-grade exception workflows. 
+
+Here are a few "exotic" ways you can use the package to supercharge your application:
+
+### 1. The "Live-State" External API Context
+The `#[WithContext]` attribute doesn't just read static variables. Because it maps to a method on your Exception class, that method can actually **perform API calls** to gather the exact state of the world at the moment of failure!
+
+Imagine a Stripe subscription charge fails. Instead of just logging "Payment Failed", your exception can query Stripe in real-time and attach the customer's balance to the Slack log!
+
+```php
+use Exception;
+use Stripe\StripeClient;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+
+#[ReportTo('billing-alerts')]
+class StripeChargeFailedException extends Exception
+{
+    public function __construct(
+        public string $stripeCustomerId,
+        public int $attemptedAmount,
+        string $message = "Charge failed"
+    ) {
+        parent::__construct($message);
+    }
+
+    #[WithContext]
+    public function gatherStripeIntel(): array
+    {
+        // 🚀 Fetch real-time data from Stripe when the exception is reported!
+        $stripe = new StripeClient(env('STRIPE_SECRET'));
+        $customer = $stripe->customers->retrieve($this->stripeCustomerId);
+
+        return [
+            'attempted_amount' => $this->attemptedAmount,
+            'customer_email'   => $customer->email,
+            'account_balance'  => $customer->balance,
+            'is_delinquent'    => $customer->delinquent,
+            'action_required'  => 'Please contact customer to update card.',
+        ];
+    }
+}
+```
+**Result:** When the exception hits the `LogReporter`, it pauses, calls `gatherStripeIntel()`, talks to Stripe, and your Slack `billing-alerts` channel receives an incredibly detailed forensic report!
+
+### 2. The "Self-Healing" Reporter (Auto-Restarting Workers)
+Reporters don't just have to send logs. A Reporter is just a class that implements `ErrorReporterInterface`. You can create a **Self-Healing Reporter** that detects specific critical exceptions and executes terminal commands to fix the server automatically!
+
+```php
+use Illuminate\Support\Facades\Artisan;
+use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Throwable;
+
+class SelfHealingReporter implements ErrorReporterInterface
+{
+    public function shouldReport(Throwable $e): bool
+    {
+        // Only trigger self-healing for Database Connection timeouts
+        return $e instanceof \Illuminate\Database\QueryException && 
+               str_contains($e->getMessage(), 'server has gone away');
+    }
+
+    public function report(Throwable $e): bool
+    {
+        // 🚀 Auto-restart the queue workers to re-establish DB connections!
+        Artisan::call('queue:restart');
+        
+        // Return true to allow the next Reporter (e.g. Slack) to also run,
+        // so you get a message saying "DB died, but I restarted the queues!"
+        return true; 
+    }
+}
+```
+Register this in `config/errors.php` inside the `'reporters'` array, and your app will literally fix itself before PagerDuty even rings!
+
+### 3. Dynamic Channel Routing based on Severity
+What if you want to route an exception to a different Slack channel based on how much money is involved?
+You can't do this with a static `#[ReportTo('channel')]` attribute. Instead, you build a **Dynamic Routing Reporter**:
+
+```php
+use Illuminate\Support\Facades\Log;
+use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Throwable;
+
+class FinancialRoutingReporter implements ErrorReporterInterface
+{
+    public function shouldReport(Throwable $e): bool
+    {
+        return $e instanceof TransactionFailedException;
+    }
+
+    public function report(Throwable $e): bool
+    {
+        $context = ExceptionInspector::context($e);
+        
+        // 🚀 Dynamic routing logic!
+        if ($e->amount > 10000) {
+            Log::channel('ceo-alerts')->critical("WHALE ALERT: {$e->getMessage()}", $context);
+        } else {
+            Log::channel('dev-team')->warning("Standard failure: {$e->getMessage()}", $context);
+        }
+        
+        return true;
+    }
+}
+```
+
+### 4. Interactive Inertia "Action Modal"
+Because the package uses `InertiaRenderer` configured to return props, you can use the `#[WithContext]` data not just for backend logging, but to **drive frontend UI**.
+
+If an exception is thrown because a user's subscription expired, you can attach a checkout URL to the context. The Inertia frontend catches it and automatically shows a "Pay Now" modal!
+
+```php
+#[HttpCode(402)] // Payment Required
+#[TranslatedMessage('Your subscription has expired.')]
+class SubscriptionExpiredException extends Exception
+{
+    #[WithContext]
+    public function frontendPayload(): array
+    {
+        return [
+            // This is sanitized from backend logs but exposed to Inertia!
+            'show_payment_modal' => true,
+            'checkout_url' => route('billing.checkout'),
+        ];
+    }
+}
+```
+In your Vue/React layout:
+```vue
+<script setup>
+import { usePage } from '@inertiajs/vue3'
+import { computed } from 'vue'
+
+const error = computed(() => usePage().props.error)
+</script>
+
+<template>
+  <PaymentModal 
+    v-if="error?.status === 402 && error?.context?.show_payment_modal" 
+    :url="error.context.checkout_url" 
+  />
+</template>
+```
+
+By viewing exceptions not as "crashes", but as **rich data objects**, this package allows you to build completely seamless, interactive, and self-healing applications!
