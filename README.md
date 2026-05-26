@@ -1494,7 +1494,7 @@ By embracing the **"Fail Fast"** principle, your controllers and services will b
 
 ## 🚧 Bypassing the Pipeline: Native Laravel Exceptions
 
-You might be wondering: *"What happens when Laravel throws a `ValidationException` (422) during form validation? Will the package break it?"*
+You might be wondering: *"What happens when Laravel throws a `ValidationException` (422) during form validation, or an `AuthorizationException` (403) from a Gate/Policy? Will the package break it?"*
 
 The answer is **No**. The package has a built-in `pass_through` mechanism defined in `config/errors.php`:
 
@@ -1502,11 +1502,12 @@ The answer is **No**. The package has a built-in `pass_through` mechanism define
 'pass_through' => [
     \Illuminate\Validation\ValidationException::class,
     \Illuminate\Auth\AuthenticationException::class,
+    \Illuminate\Auth\Access\AuthorizationException::class,
 ],
 ```
 
 When the `ErrorManager` encounters an exception listed in this array, it immediately halts its own pipeline and **yields full control back to Laravel's native exception handler**. 
-This guarantees that form validation redirects, `$errors` bags, and login redirects work exactly as they normally do in standard Laravel, without any interference!
+This guarantees that form validation redirects, `$errors` bags, unauthenticated redirects, and 403 Forbidden pages (Gates/Policies) work exactly as they normally do in standard Laravel, without any interference!
 
 ---
 
@@ -1619,3 +1620,48 @@ When this exception is thrown in an API request, the client receives the beautif
 }
 ```
 This guarantees that **every single exception** thrown in your application will conform to your company's API contract natively, without repeating formatting logic in your controllers!
+
+---
+
+## 🛡️ Working with Gates & Permissions (`AuthorizationException`)
+
+When you use Laravel's native authorization features (like **Gates** or **Policies**), Laravel automatically throws an `\Illuminate\Auth\Access\AuthorizationException` if the user is not allowed to perform an action.
+
+Because this package is designed to intercept unhandled exceptions, you might wonder: *"Will my 403 Forbidden errors get logged as 500 Server Errors in Slack?"*
+
+**By default, NO!** The package handles this gracefully because `AuthorizationException` is included in the `pass_through` array in `config/errors.php`:
+
+```php
+'pass_through' => [
+    \Illuminate\Validation\ValidationException::class,
+    \Illuminate\Auth\AuthenticationException::class,
+    \Illuminate\Auth\Access\AuthorizationException::class, // <-- Ignores Policy/Gate failures!
+],
+```
+
+### How to use Gates/Policies with this package
+You don't need to change anything about how you write your code. Just use Laravel's native authorization methods:
+
+```php
+// In a Controller
+public function destroy(Post $post)
+{
+    // If this fails, Laravel throws AuthorizationException.
+    // Our package ignores it, and Laravel natively returns a 403 response!
+    Gate::authorize('delete', $post);
+    
+    $post->delete();
+}
+```
+
+**What if I WANT to log authorization failures?**
+If you are building a high-security application (like banking) and you actively *want* to be notified on Slack whenever someone attempts an unauthorized action, you can remove `AuthorizationException::class` from the `pass_through` array.
+
+Then, you can map the native exception to your custom attributes using the package's pipeline, or simply create a custom exception for security breaches:
+
+```php
+// Throw a decorated exception for security breaches instead of a standard Gate!
+if (Gate::denies('delete', $post)) {
+    throw new SecurityBreachException('User attempted to delete a post they do not own!');
+}
+```

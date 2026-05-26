@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Validation\ValidationException;
 use Isaidgitmenow\LaravelErrors\Detectors\ApiDetector;
@@ -60,6 +61,7 @@ return [
     'pass_through' => [
         ValidationException::class,
         AuthenticationException::class,
+        AuthorizationException::class,
     ],
 
     /*
