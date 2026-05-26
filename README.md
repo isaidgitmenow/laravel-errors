@@ -1392,3 +1392,73 @@ class AppServiceProvider extends ServiceProvider
 If you have multiple custom detectors, the `ErrorManager` evaluates them in the **exact order** you call `addContext()`. 
 
 Furthermore, **all dynamically added contexts are prepended** to the default pipeline. This means your custom `IosAppDetector` and `AndroidAppDetector` will always be evaluated *before* the package's default `ApiDetector` or `WebDetector`.
+
+---
+
+## 🤔 Do I Still Need `try/catch`?
+
+A common question when adopting this package is whether you still need to use `try/catch` blocks in your application code.
+
+The short answer is: **No for fatal errors, Yes for recovery/fallback.**
+
+This package changes how you view errors: they are no longer just "code crashes", but declarative communication tools.
+
+### 1. When you NO LONGER need `try/catch` (95% of cases)
+Traditionally, you would catch an exception just to log it and return a formatted HTTP response. **You no longer need to do this.** If the goal is to stop execution and show an error, just `throw`.
+
+❌ **The Old Way (Messy Controllers):**
+```php
+public function processPayment()
+{
+    try {
+        $stripe->charge($amount);
+    } catch (Exception $e) {
+        Log::channel('slack')->error("Payment failed: " . $e->getMessage());
+        return response()->json(['message' => 'Payment failed. Try again.'], 422);
+    }
+}
+```
+
+✅ **The New Way (Clean Controllers):**
+```php
+public function processPayment()
+{
+    if ($stripeFails) {
+        // Just throw it! The package handles the Slack log and the 422 JSON response.
+        throw new PaymentFailedException($amount);
+    }
+}
+```
+
+### 2. When you STILL need `try/catch` (Fallback Logic)
+You only need `try/catch` when you **do not** want the application to stop, but instead want to attempt a "Plan B".
+
+**Example A: Graceful Degradation (Fallback)**
+If an external API goes down, you might want to load stale data from Cache instead of showing an error page.
+```php
+try {
+    $rate = Api::getExchangeRate();
+} catch (ConnectionException $e) {
+    // We catch the error so the app DOES NOT crash. We use a fallback instead.
+    $rate = Cache::get('last_known_rate'); 
+}
+```
+
+**Example B: Database Rollbacks**
+When performing complex DB operations, you need to catch exceptions to rollback the transaction. However, you should still `throw` the exception at the end of the catch block so the package can process it!
+```php
+DB::beginTransaction();
+
+try {
+    $user->update([...]);
+    $invoice->generate([...]);
+    DB::commit();
+} catch (Exception $e) {
+    DB::rollBack(); // 1. Revert database changes
+    
+    // 2. Throw a decorated exception so the package can log it and notify the user!
+    throw new DatabaseTransactionFailedException($e->getMessage());
+}
+```
+
+By embracing the **"Fail Fast"** principle, your controllers and services will become incredibly thin. Just `throw` the decorated exceptions and let the package do the heavy lifting!
