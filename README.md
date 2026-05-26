@@ -918,3 +918,174 @@ class BillingFailedException extends \Exception
 When this exception is sent to Flare, the `userId` and `subscriptionId` will automatically be present in the **Context** tab of the error on Flare, without writing any custom Flare reporters!
 
 *(Note: If you use `#[DontReport]`, the exception will **not** be sent to Flare, keeping your error quota safe.)*
+
+---
+
+## ⚙️ Queue Jobs Integration
+
+Because this package orchestrates errors directly through Laravel's central Exception Handler (in `bootstrap/app.php`), **errors thrown inside Queue Jobs, Console Commands, and Scheduled Tasks are automatically supported.**
+
+There is no extra setup required!
+
+### Example
+
+If you throw a decorated exception inside a Job:
+
+```php
+namespace App\Jobs;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
+
+class ProcessVideoUpload implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public function __construct(public int $videoId) {}
+
+    public function handle(): void
+    {
+        // ... external API fails
+        
+        throw new VideoProcessingFailedException($this->videoId);
+    }
+}
+
+#[ReportTo('slack')]
+#[WithContext(['videoId'])]
+#[RateLimit(max: 10, intervalInMinutes: 5)] // Stop spamming Slack if the queue is failing continuously
+class VideoProcessingFailedException extends \Exception
+{
+    public function __construct(public int $videoId)
+    {
+        parent::__construct("Video encoding failed on the external provider.");
+    }
+}
+```
+
+When the Laravel Queue Worker encounters this exception, the package will automatically:
+1. Extract the `videoId` into the log context.
+2. Apply the anti-spam rate limiter.
+3. Route the error directly to the `slack` channel.
+
+---
+
+## 💻 Artisan Commands Integration
+
+Similar to Queue Jobs, exceptions thrown inside Artisan Commands (`php artisan ...`) are captured natively by the same `ErrorHandler`.
+
+If a command fails, the exception is parsed for attributes (like `#[ReportTo]` or `#[WithContext]`) before the console terminates.
+
+### Example
+
+```php
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+
+class SyncRemoteDataCommand extends Command
+{
+    protected $signature = 'app:sync-data {provider}';
+
+    public function handle(): int
+    {
+        $provider = $this->argument('provider');
+
+        // ... sync process fails
+        throw new DataSyncFailedException($provider);
+    }
+}
+
+#[ReportTo(['slack', 'emergency_file'])]
+#[WithContext(['providerName'])]
+class DataSyncFailedException extends \Exception
+{
+    public function __construct(public string $providerName)
+    {
+        parent::__construct("Failed to synchronize data from the external provider.");
+    }
+}
+```
+
+If you run `php artisan app:sync-data salesforce` and it fails, the error is immediately logged to the `slack` and `emergency_file` channels, complete with the `providerName: "salesforce"` context, and then the command exits with a failure status code.
+
+---
+
+## 🛑 Anti-Spam: Error Rate Limiting (In-Depth)
+
+When an external service goes down or a database connection fails, you can quickly rack up thousands of identical errors in a few seconds. This can exhaust your Sentry/Flare quota, trigger aggressive Slack notifications, and fill up your server's disk space.
+
+This package solves this natively using the `#[RateLimit]` attribute, which is powered by Laravel's core `RateLimiter` facade.
+
+### How it works
+When an exception carrying `#[RateLimit]` is thrown, the `ErrorManager` dynamically wraps all of your reporters (like `LogReporter`, `NightWatchReporter`) in a `RateLimitedReporter`. 
+
+If the threshold is exceeded, the reporter simply **skips** sending the error to external trackers, but **still executes the Renderers** (so the user still sees the correct 500 API/Inertia/Livewire response).
+
+### Example Scenario
+
+Imagine you have a billing process that calls Stripe. If Stripe's API is temporarily unreachable, you don't want 500 Slack messages.
+
+```php
+namespace App\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
+
+// Limit to 2 logs every 5 minutes
+#[RateLimit(max: 2, intervalInMinutes: 5)]
+#[ReportTo('slack')]
+#[TranslatedMessage('checkout.payment_gateway_down')]
+class PaymentGatewayOfflineException extends Exception
+{
+    public function __construct(string $message = "Payment provider timeout.")
+    {
+        parent::__construct($message);
+    }
+}
+```
+
+If 100 users try to checkout within 5 minutes and this exception is thrown 100 times:
+1. **Occurrence 1:** Sent to Slack. User sees "Payment provider timeout" toast.
+2. **Occurrence 2:** Sent to Slack. User sees "Payment provider timeout" toast.
+3. **Occurrence 3 to 100:** **NOT** sent to Slack (Quota saved!). User still sees the correct "Payment provider timeout" toast.
+
+Once the 5-minute interval passes, the rate limiter resets automatically and the next occurrence will be reported to Slack again.
+
+---
+
+## ⚡ Performance & Error Cache (Octane / Testing)
+
+Because this package relies heavily on PHP 8 Attributes, it uses PHP's Reflection API to inspect exceptions when they are thrown.
+
+To guarantee zero performance impact in production, the `ExceptionInspector` utilizes an **in-memory static cache** per-request. Once an exception class is reflected, its attributes are cached. If the same exception is thrown again during the lifecycle of the request, the reflection is skipped and the cached attributes are used instantly.
+
+### Long-Running Processes (Laravel Octane / Tests)
+In typical Laravel requests, the static cache is naturally destroyed at the end of the request. However, in environments that keep the application bootstrapped in memory (like **Laravel Octane**) or during continuous PHPUnit / Pest tests, you might need to flush this cache manually to avoid memory leaks or state bleeding between tests.
+
+You can manually clear the reflection cache at any time by calling:
+
+```php
+use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+
+ExceptionInspector::flushCache();
+```
+
+**Testing Tip:** If you are testing exceptions in Pest or PHPUnit and asserting different attributes dynamically on the same exception class, you should call `flushCache()` in your `tearDown()` or `afterEach()` hooks:
+
+```php
+// Pest Example
+afterEach(function () {
+    \Isaidgitmenow\LaravelErrors\ExceptionInspector::flushCache();
+});
+```
