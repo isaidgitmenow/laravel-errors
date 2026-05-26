@@ -1374,8 +1374,21 @@ class AppServiceProvider extends ServiceProvider
                 detector: IosAppDetector::class, 
                 renderer: IosAppRenderer::class
             );
+
+            // You can add as many custom detectors as you want!
+            // The order in which you call addContext() is the exact order they will be evaluated.
+            // All custom detectors run BEFORE the default package detectors.
+            $manager->addContext(
+                detector: AndroidAppDetector::class,
+                renderer: AndroidAppRenderer::class
+            );
             
         });
     }
 }
 ```
+
+### Order of Evaluation
+If you have multiple custom detectors, the `ErrorManager` evaluates them in the **exact order** you call `addContext()`. 
+
+Furthermore, **all dynamically added contexts are prepended** to the default pipeline. This means your custom `IosAppDetector` and `AndroidAppDetector` will always be evaluated *before* the package's default `ApiDetector` or `WebDetector`.
