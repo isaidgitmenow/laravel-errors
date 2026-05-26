@@ -117,16 +117,16 @@ The `ExceptionInspector` utilizes PHP Reflection to recursively traverse the exc
 The package uses a Strategy Pipeline to automatically identify the request type and return the correct format so your frontend SPAs don't break on a 500 error.
 
 ### 🛡️ Filament Panels
-- **`FilamentDetector`**: Matches requests where the path is within the Filament routing scope (e.g., `admin/*`).
-- **`FilamentRenderer`**: Returns a structured JSON response simulating a Livewire `dispatch` event. If `#[TranslatedMessage]` is used, it triggers a red error Toast Notification inside the Filament UI without breaking the panel.
+- **`FilamentDetector`**: Matches requests by checking if there is an active Filament panel running (`\Filament\Facades\Filament::getCurrentPanel() !== null`). This works flawlessly regardless of your custom routing structure!
+- **`FilamentRenderer`**: Executes a native Filament `Notification::make()->send()` to trigger a native error Toast Notification inside the Filament UI without breaking the panel. It then returns a standard JSON response to gracefully conclude the Livewire lifecycle.
 
 ### ⚡ Livewire
 - **`LivewireDetector`**: Matches requests carrying the `X-Livewire` header.
-- **`LivewireRenderer`**: Returns an HTML response containing a script payload that Livewire can parse natively. This prevents full-page HTML crash dumps from destroying Livewire component state.
+- **`LivewireRenderer`**: Returns a structured JSON response containing the error message. Livewire parses this natively, preventing full-page HTML crash dumps from destroying Livewire component state.
 
 ### ⚛️ Inertia.js (Vue/React/Svelte)
 - **`InertiaDetector`**: Matches requests carrying the `X-Inertia` header.
-- **`InertiaRenderer`**: Returns a JSON response containing an Inertia modal configuration. It uses the `#[TranslatedMessage]` and `#[HttpCode]` so your frontend SPA can catch the exception gracefully instead of logging out the user or showing raw HTML.
+- **`InertiaRenderer`**: Depending on your `inertia_mode` config, it either shares the error globally as an Inertia `prop` and redirects back, or natively renders a dedicated Error Component via `Inertia::render()`. This allows your SPA to handle the error natively without crashing.
 
 ### 🔌 API Requests
 - **`ApiDetector`**: Matches requests calling `wantsJson()` or paths matching `api/*`.
@@ -1294,13 +1294,13 @@ The package uses a pipeline of **Context Detectors** configured in `config/error
 
 Here is how the default detectors work:
 
-1. **`FilamentDetector`**: Inspects the URL path to see if it matches your Filament admin panel prefix (e.g., `/admin/*`).
-2. **`LivewireDetector`**: Checks if the request contains the `X-Livewire: true` header.
-3. **`InertiaDetector`**: Checks if the request contains the `X-Inertia: true` header.
+1. **`FilamentDetector`**: Safely checks if there is an active Filament panel running (`\Filament\Facades\Filament::getCurrentPanel() !== null`).
+2. **`LivewireDetector`**: Checks if the request contains the `X-Livewire` header.
+3. **`InertiaDetector`**: Checks if the request contains the `X-Inertia` header.
 4. **`ApiDetector`**: Checks if the request expects JSON (`$request->wantsJson()`) or if the URL path starts with `/api/*`.
 5. **`WebDetector`**: The ultimate fallback. Always returns `true` and defers rendering back to standard Laravel Blade views.
 
-Because this detection is dynamic and based entirely on the HTTP Request headers and paths, **you can throw the exact same exception class from a background Job, an API Controller, or a Filament Action**, and the package will perfectly adapt the visual response to the user's environment!
+Because this detection is dynamic and based entirely on the HTTP Request, headers, and running facades, **you can throw the exact same exception class from a background Job, an API Controller, or a Filament Action**, and the package will perfectly adapt the visual response to the user's environment!
 
 ---
 
