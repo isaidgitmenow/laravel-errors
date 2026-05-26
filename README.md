@@ -1489,3 +1489,38 @@ try {
 ```
 
 By embracing the **"Fail Fast"** principle, your controllers and services will become incredibly thin. Just `throw` the decorated exceptions and let the package do the heavy lifting!
+
+---
+
+## 🚧 Bypassing the Pipeline: Native Laravel Exceptions
+
+You might be wondering: *"What happens when Laravel throws a `ValidationException` (422) during form validation? Will the package break it?"*
+
+The answer is **No**. The package has a built-in `pass_through` mechanism defined in `config/errors.php`:
+
+```php
+'pass_through' => [
+    \Illuminate\Validation\ValidationException::class,
+    \Illuminate\Auth\AuthenticationException::class,
+],
+```
+
+When the `ErrorManager` encounters an exception listed in this array, it immediately halts its own pipeline and **yields full control back to Laravel's native exception handler**. 
+This guarantees that form validation redirects, `$errors` bags, and login redirects work exactly as they normally do in standard Laravel, without any interference!
+
+---
+
+## 🤷‍♂️ Handling Generic (Un-decorated) Exceptions
+
+What happens if you (or a third-party package) throw a raw exception without any of our custom attributes?
+
+```php
+throw new \Exception("Something broke!");
+```
+
+The package is smart enough to handle this perfectly! 
+1. It defaults to an **HTTP 500** status code.
+2. It sends the log to your default logging channel (via Laravel's standard Log facade).
+3. Most importantly: **It still uses the Context Renderers!** 
+
+This means if a raw `PDOException` is thrown during a **Livewire** request, the `LivewireRenderer` will still intercept it and return a safe JSON payload instead of a crashing HTML stack trace. Your app's frontend stays resilient even for unexpected, un-decorated errors!
