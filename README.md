@@ -1461,4 +1461,31 @@ try {
 }
 ```
 
+**Example C: Loop Continuation (Partial Failures)**
+When processing a batch of items (like a CSV import or sending newsletters), you don't want one bad row to abort the entire job.
+```php
+foreach ($users as $user) {
+    try {
+        $this->newsletterService->sendTo($user);
+    } catch (EmailBouncedException $e) {
+        // Log this specific failure, but DO NOT stop the loop!
+        // We can manually trigger the package's pipeline if we still want it reported:
+        app(\Isaidgitmenow\LaravelErrors\ErrorManager::class)->report($e);
+        
+        continue; // Process the next user
+    }
+}
+```
+
+**Example D: Exception Translation (Wrapping 3rd Party Errors)**
+If a vendor package throws a generic exception (which you cannot decorate because you don't own the code), you can catch it and throw your own decorated exception instead.
+```php
+try {
+    $mailchimp->subscribe($email);
+} catch (\Mailchimp\Exceptions\TimeoutException $e) {
+    // Catch the generic 3rd party exception and throw our own decorated one
+    throw new NewsletterSubscriptionFailedException($email, $e);
+}
+```
+
 By embracing the **"Fail Fast"** principle, your controllers and services will become incredibly thin. Just `throw` the decorated exceptions and let the package do the heavy lifting!
