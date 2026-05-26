@@ -1089,3 +1089,58 @@ afterEach(function () {
     \Isaidgitmenow\LaravelErrors\ExceptionInspector::flushCache();
 });
 ```
+
+---
+
+## 🧪 Testing Your Application
+
+When writing Feature tests for an application that uses this package, you are usually testing that your API/Livewire/Inertia endpoints gracefully handle errors and return the correct status codes and translated messages.
+
+### 1. Do NOT disable exception handling
+In Laravel testing, developers often use `$this->withoutExceptionHandling()`. If you do this, Laravel will throw the raw PHP exception during the test and the `ErrorManager` pipeline will **never run**. 
+
+To test that your application returns the correct API/Inertia/Livewire error responses, **keep exception handling enabled** (which is the default behavior in Laravel tests).
+
+### 2. Asserting API Responses
+Because the `ApiRenderer` formats the response predictably based on your attributes, testing becomes incredibly easy.
+
+Suppose you have an endpoint that throws a `#[HttpCode(422)]` and `#[TranslatedMessage('errors.invalid_action')]` exception.
+
+```php
+// Pest Feature Test
+test('it returns a formatted 422 error when the action is invalid', function () {
+    // Make an API request
+    $response = $this->postJson('/api/process-action', [
+        'data' => 'bad_data'
+    ]);
+
+    // Assert the package caught it and applied the #[HttpCode]
+    $response->assertStatus(422);
+
+    // Assert the package applied the #[TranslatedMessage]
+    $response->assertJson([
+        'message' => __('errors.invalid_action'),
+        'errors' => []
+    ]);
+});
+```
+
+### 3. Asserting Context & Reporters
+If you want to assert that an error was correctly reported to a specific channel (e.g., via `#[ReportTo]`), you can mock the `Log` facade just like you would in any standard Laravel application:
+
+```php
+use Illuminate\Support\Facades\Log;
+
+test('it sends critical errors to the slack channel', function () {
+    // Spy on the slack channel
+    Log::shouldReceive('channel')
+        ->with('slack')
+        ->once()
+        ->andReturnSelf();
+        
+    Log::shouldReceive('error')->once();
+
+    // Trigger the endpoint that throws the exception
+    $this->postJson('/api/critical-action');
+});
+```
