@@ -1494,20 +1494,25 @@ By embracing the **"Fail Fast"** principle, your controllers and services will b
 
 ## 🚧 Bypassing the Pipeline: Native Laravel Exceptions
 
-You might be wondering: *"What happens when Laravel throws a `ValidationException` (422) during form validation, or an `AuthorizationException` (403) from a Gate/Policy? Will the package break it?"*
+You might be wondering: *"What happens when Laravel throws a `ValidationException` (422) during form validation, an `AuthorizationException` (403) from a Gate, or a `NotFoundHttpException` (404) for a missing page? Will the package intercept them and log them as 500 errors?"*
 
-The answer is **No**. The package has a built-in `pass_through` mechanism defined in `config/errors.php`:
+The answer is **No**. The package has a built-in `pass_through` mechanism defined in `config/errors.php`. This array comes pre-configured with all of Laravel's core HTTP and routing exceptions:
 
 ```php
 'pass_through' => [
     \Illuminate\Validation\ValidationException::class,
     \Illuminate\Auth\AuthenticationException::class,
     \Illuminate\Auth\Access\AuthorizationException::class,
+    \Symfony\Component\HttpKernel\Exception\HttpException::class, // Catches 404s, 405s, 429s, etc.
+    \Illuminate\Database\Eloquent\ModelNotFoundException::class,  // Catches User::findOrFail()
+    \Illuminate\Session\TokenMismatchException::class,            // Catches CSRF failures
+    \Illuminate\Http\Exceptions\HttpResponseException::class,
 ],
 ```
 
-When the `ErrorManager` encounters an exception listed in this array, it immediately halts its own pipeline and **yields full control back to Laravel's native exception handler**. 
-This guarantees that form validation redirects, `$errors` bags, unauthenticated redirects, and 403 Forbidden pages (Gates/Policies) work exactly as they normally do in standard Laravel, without any interference!
+When the `ErrorManager` encounters an exception that is an `instanceof` any class listed in this array, it immediately halts its own pipeline and **yields full control back to Laravel's native exception handler**. 
+
+This guarantees that form validation redirects, `$errors` bags, unauthenticated redirects, 403 Forbidden pages, and standard 404 Not Found pages work exactly as they normally do in standard Laravel, without triggering false alarms in your Slack channel or error logs!
 
 ---
 
@@ -1665,3 +1670,33 @@ if (Gate::denies('delete', $post)) {
     throw new SecurityBreachException('User attempted to delete a post they do not own!');
 }
 ```
+
+---
+
+## 🚦 The "Pass Through" Exceptions (Complete List)
+
+By default, the package ships with a pre-configured `pass_through` array in `config/errors.php`. When an exception listed here is thrown, the package **immediately stops its own pipeline** and lets Laravel handle it natively.
+
+Here is the complete list and *why* they are bypassed:
+
+1. **`\Illuminate\Validation\ValidationException::class`**
+   - **Why:** Thrown by FormRequests. Bypassing it ensures your `$errors` variable is populated in Blade and that API users receive the standard 422 JSON response.
+2. **`\Illuminate\Auth\AuthenticationException::class`**
+   - **Why:** Thrown when a guest visits a protected route. Bypassing it ensures the user gets redirected to `/login` (Web) or receives a 401 response (API) natively.
+3. **`\Illuminate\Auth\Access\AuthorizationException::class`**
+   - **Why:** Thrown when a Gate or Policy fails. Bypassing it ensures Laravel renders a standard 403 Forbidden page instead of logging a 500 Server Error.
+4. **`\Symfony\Component\HttpKernel\Exception\HttpException::class`**
+   - **Why:** The base class for all HTTP errors (`NotFoundHttpException`, `TooManyRequestsHttpException`, etc.). Bypassing this guarantees that 404s and Rate Limits are handled by Laravel natively.
+5. **`\Illuminate\Database\Eloquent\ModelNotFoundException::class`**
+   - **Why:** Thrown by `User::findOrFail($id)`. Laravel natively converts this to a 404 Not Found. Bypassing it prevents false-positive 500 error logs.
+6. **`\Illuminate\Session\TokenMismatchException::class`**
+   - **Why:** Thrown when a CSRF token expires. Bypassing it lets Laravel show the standard 419 Page Expired template.
+7. **`\Illuminate\Http\Exceptions\HttpResponseException::class`**
+   - **Why:** An internal Laravel exception used to abruptly halt execution and return a raw Response object. Must be bypassed.
+
+### Interacting with Pass-Through Exceptions
+
+If you want the package to intercept *any* of the native exceptions above, you have full control! 
+
+Just open `config/errors.php` and **delete** the class from the `pass_through` array. 
+Once removed, the `ErrorManager` will catch it, evaluate your Custom Context Detectors, run your Reporters (like Slack or Sentry), and finally render it using your preferred `ApiRenderer` or `LivewireRenderer`!

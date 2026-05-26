@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Isaidgitmenow\LaravelErrors\Detectors\ApiDetector;
 use Isaidgitmenow\LaravelErrors\Detectors\FilamentDetector;
 use Isaidgitmenow\LaravelErrors\Detectors\InertiaDetector;
@@ -62,6 +66,10 @@ return [
         ValidationException::class,
         AuthenticationException::class,
         AuthorizationException::class,
+        HttpException::class,
+        ModelNotFoundException::class,
+        TokenMismatchException::class,
+        HttpResponseException::class,
     ],
 
     /*
