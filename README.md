@@ -1524,3 +1524,21 @@ The package is smart enough to handle this perfectly!
 3. Most importantly: **It still uses the Context Renderers!** 
 
 This means if a raw `PDOException` is thrown during a **Livewire** request, the `LivewireRenderer` will still intercept it and return a safe JSON payload instead of a crashing HTML stack trace. Your app's frontend stays resilient even for unexpected, un-decorated errors!
+
+---
+
+## 📝 A Note on API Form Requests (`ValidationException`)
+
+If you are building an API and using Laravel's `FormRequest` classes, you might wonder what happens when a user submits invalid data. Does the package log the error? Does it change the 422 JSON response?
+
+The answer is **No, by design.**
+
+As mentioned in the *Bypassing the Pipeline* section, `\Illuminate\Validation\ValidationException::class` is in the `pass_through` array by default.
+
+When validation fails in a Form Request:
+1. Laravel throws a `ValidationException`.
+2. The `ErrorManager` sees it in the `pass_through` array and ignores it.
+3. It is **not** logged to Slack, Flare, or your log files (which is good, you don't want alerts for every typo a user makes).
+4. Laravel natively takes over and returns the standard `422 Unprocessable Entity` JSON response with the `$errors` bag.
+
+If you ever *want* to intercept validation errors (for example, to force them into a proprietary JSON format via your `ApiRenderer`), simply remove `ValidationException::class` from the `pass_through` array in `config/errors.php`. However, sticking to Laravel's native 422 structure is highly recommended!
