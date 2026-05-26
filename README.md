@@ -1194,3 +1194,92 @@ class WebhookSignatureInvalidException extends Exception {}
 When these exceptions are thrown, the `LogReporter` bypasses the default channel and explicitly routes the message (and context) only to the channels you specified:
 - `PaymentDeclinedException` will ONLY be written to `storage/logs/payments.log`.
 - `WebhookSignatureInvalidException` will be written to `storage/logs/webhooks-2023-10-25.log` AND sent as a message to your Slack workspace.
+
+---
+
+## 🚀 The Complete Lifecycle: Generating, Throwing & Logging
+
+If you are new to the package, here is a step-by-step walkthrough of exactly how to generate an exception, throw it in your code, and see how it gets logged.
+
+### 1. Generating the Exception
+First, create your custom exception class. You can use Laravel's artisan command to create the base file:
+
+```bash
+php artisan make:exception OrderFailedException
+```
+
+### 2. Decorating with Attributes
+Open the generated file in `app/Exceptions/OrderFailedException.php` and add your desired attributes.
+
+We will add a specific HTTP Code, a translated user message, inject context, and route it directly to the `slack` channel.
+
+```php
+namespace App\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+
+#[HttpCode(422)]
+#[TranslatedMessage('orders.insufficient_inventory')]
+#[ReportTo('slack')]
+#[WithContext(['orderId', 'failedItemSku'])] // Extracts these public properties
+class OrderFailedException extends Exception
+{
+    // The public properties defined here will be extracted by #[WithContext]
+    public function __construct(
+        public int $orderId,
+        public string $failedItemSku,
+        string $internalDeveloperMessage = "Order processing failed due to inventory mismatch."
+    ) {
+        // The internal message is what gets logged (not shown to the user)
+        parent::__construct($internalDeveloperMessage);
+    }
+}
+```
+
+### 3. Throwing the Exception
+Now, you simply `throw` this exception anywhere in your application logic (Controllers, Services, Jobs, etc.).
+
+```php
+namespace App\Services;
+
+use App\Exceptions\OrderFailedException;
+use App\Models\Order;
+
+class OrderProcessingService
+{
+    public function process(Order $order)
+    {
+        $inventoryAvailable = false; // Simulated logic
+        
+        if (! $inventoryAvailable) {
+            // Throw the custom exception and pass the necessary context data
+            throw new OrderFailedException(
+                orderId: $order->id,
+                failedItemSku: 'SKU-999'
+            );
+        }
+        
+        // ... continue processing
+    }
+}
+```
+
+### 4. What Happens Behind the Scenes?
+The moment you run `throw new OrderFailedException(...)`:
+
+1. **The Application Stops**: The standard execution stops and Laravel hands the exception over to the `ErrorHandler` in `bootstrap/app.php` (which is powered by this package).
+2. **Context Extraction**: The package reads `#[WithContext]`, takes `$orderId` and `$failedItemSku`, and dynamically injects them into Laravel's Global Context (and sanitizes them if needed).
+3. **The Reporters Run**: 
+   - The package reads `#[ReportTo('slack')]`.
+   - It fires `Log::channel('slack')->error("Order processing failed due to inventory mismatch.", ['orderId' => ..., 'failedItemSku' => ...])`.
+   - The developer gets a Slack notification immediately!
+4. **The Renderers Run**:
+   - If the request came from an **API**, it returns a `422` JSON response with the translated message.
+   - If it came from **Livewire/Filament**, it triggers a native red Toast notification with the translated message.
+   - If it came from a **Queue Job**, the job is marked as failed (and no HTTP response is rendered).
+
+All of this happens instantly, with zero boilerplate in your controllers!
