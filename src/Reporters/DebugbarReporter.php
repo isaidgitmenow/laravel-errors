@@ -21,6 +21,9 @@ use Throwable;
  */
 final class DebugbarReporter implements ErrorReporterInterface
 {
+    public function __construct(
+        private readonly array $config = [],
+    ) {}
     public function shouldReport(Throwable $e): bool
     {
         return $this->isDebugbarAvailable() && app()->hasDebugModeEnabled();
