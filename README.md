@@ -886,3 +886,35 @@ class AppServiceProvider extends ServiceProvider
 ```
 
 Now, any exception thrown in your application will be automatically intercepted, sanitized, and sent to NightWatch!
+
+---
+
+## 💥 Flare (or Sentry) Integration
+
+Integrating with Flare (or Sentry) is virtually zero-config because this package leverages **Laravel 11's Global Context**.
+
+### How it works out of the box
+When you decorate an exception with `#[WithContext]`, the `ErrorManager` automatically extracts that data, sanitizes it (hiding passwords/tokens), and injects it into Laravel's `Context` facade.
+
+Because the official Flare package (`spatie/laravel-ignition` and `spatie/flare-client-php`) automatically reads from Laravel's Context, **all your custom exception data will magically appear in your Flare dashboard!**
+
+### Example
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+
+#[WithContext(['userId', 'subscriptionId'])]
+class BillingFailedException extends \Exception
+{
+    public function __construct(
+        public int $userId,
+        public string $subscriptionId
+    ) {
+        parent::__construct("Billing attempt failed.");
+    }
+}
+```
+
+When this exception is sent to Flare, the `userId` and `subscriptionId` will automatically be present in the **Context** tab of the error on Flare, without writing any custom Flare reporters!
+
+*(Note: If you use `#[DontReport]`, the exception will **not** be sent to Flare, keeping your error quota safe.)*
