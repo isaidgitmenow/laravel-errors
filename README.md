@@ -1144,3 +1144,53 @@ test('it sends critical errors to the slack channel', function () {
     $this->postJson('/api/critical-action');
 });
 ```
+
+---
+
+## 🔀 Routing to Different Log Channels
+
+Sometimes you don't want all errors dumped into a single `laravel.log` file. You might want critical payment errors sent to an `emergency` file, API timeouts sent to a `daily` file, and generic errors handled normally.
+
+Because this package perfectly bridges PHP Attributes with Laravel's core Logging system, routing errors to different channels is extremely simple.
+
+### 1. Define your Channels in Laravel
+First, ensure your channels are configured in Laravel's native `config/logging.php`:
+
+```php
+// config/logging.php
+'channels' => [
+    'payments' => [
+        'driver' => 'single',
+        'path' => storage_path('logs/payments.log'),
+        'level' => 'debug',
+    ],
+    
+    'webhooks' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/webhooks.log'),
+        'days' => 14,
+    ],
+],
+```
+
+### 2. Route via Attribute
+Use the `#[ReportTo]` attribute on your exception. You can pass a single string or an array of multiple channels.
+
+```php
+namespace App\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+
+// Send to a single custom channel
+#[ReportTo('payments')]
+class PaymentDeclinedException extends Exception {}
+
+// Send to multiple channels simultaneously!
+#[ReportTo(['webhooks', 'slack'])]
+class WebhookSignatureInvalidException extends Exception {}
+```
+
+When these exceptions are thrown, the `LogReporter` bypasses the default channel and explicitly routes the message (and context) only to the channels you specified:
+- `PaymentDeclinedException` will ONLY be written to `storage/logs/payments.log`.
+- `WebhookSignatureInvalidException` will be written to `storage/logs/webhooks-2023-10-25.log` AND sent as a message to your Slack workspace.
