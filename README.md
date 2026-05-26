@@ -1542,3 +1542,80 @@ When validation fails in a Form Request:
 4. Laravel natively takes over and returns the standard `422 Unprocessable Entity` JSON response with the `$errors` bag.
 
 If you ever *want* to intercept validation errors (for example, to force them into a proprietary JSON format via your `ApiRenderer`), simply remove `ValidationException::class` from the `pass_through` array in `config/errors.php`. However, sticking to Laravel's native 422 structure is highly recommended!
+
+---
+
+## 🌐 Advanced API: Complying with JSON:API Specification
+
+Many modern APIs adhere to the strict [JSON:API Specification](https://jsonapi.org/format/#errors). By default, Laravel returns a simple `{ "message": "...", "errors": {} }` structure. 
+
+With this package, you can instantly upgrade your entire application to output strictly compliant JSON:API errors by leveraging the `json_formatter` closure in `config/errors.php`, combined with the exception attributes!
+
+### 1. Update the Config
+Open your `config/errors.php` and configure the globally applied `json_formatter`:
+
+```php
+// config/errors.php
+use Illuminate\Http\Request;
+use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+
+return [
+    // ...
+    
+    'json_formatter' => function (\Throwable $e, Request $request): array {
+        $httpCode = ExceptionInspector::httpCode($e);
+        $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
+        $context = ExceptionInspector::context($e); // Extracted from #[WithContext]
+        
+        return [
+            'errors' => [
+                [
+                    'status' => (string) $httpCode,
+                    'title' => class_basename($e),
+                    'detail' => $message,
+                    'meta' => empty($context) ? null : $context,
+                ]
+            ]
+        ];
+    },
+];
+```
+
+### 2. Throw your exceptions normally
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+
+#[HttpCode(403)]
+#[TranslatedMessage('api.insufficient_permissions')]
+#[WithContext(['requiredRole'])]
+class UnauthorizedActionException extends \Exception
+{
+    public function __construct(public string $requiredRole)
+    {
+        parent::__construct("User lacks the required role to perform this action.");
+    }
+}
+```
+
+### 3. The Result
+When this exception is thrown in an API request, the client receives the beautifully formatted, JSON:API compliant response:
+
+**HTTP Status: 403 Forbidden**
+```json
+{
+    "errors": [
+        {
+            "status": "403",
+            "title": "UnauthorizedActionException",
+            "detail": "You do not have permission to perform this action.",
+            "meta": {
+                "requiredRole": "super-admin"
+            }
+        }
+    ]
+}
+```
+This guarantees that **every single exception** thrown in your application will conform to your company's API contract natively, without repeating formatting logic in your controllers!
