@@ -23,7 +23,7 @@ Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**
 - **Environment-Specific Reporting**: Restrict `#[ReportTo]` to specific environments (e.g., only send Slack alerts in `production`).
 - **`make:error` Artisan Command**: Scaffold fully decorated exception classes in seconds with `php artisan make:error`.
 - **Static Analysis Ready**: Ships with a `phpstan.neon.dist` pre-configured for [Larastan](https://github.com/larastan/larastan) level 5.
-- **CI/CD Ready**: Includes a GitHub Actions workflow matrix covering PHP 8.2/8.3 × Laravel 11/12.
+- **CI/CD Ready**: Includes a GitHub Actions workflow matrix covering PHP 8.4/8.5 × Laravel 11/12.
 
 ## 📦 Requirements
 
@@ -2160,10 +2160,10 @@ The package ships with a ready-to-use GitHub Actions workflow at `.github/workfl
 
 | PHP | Laravel | What runs |
 |---|---|---|
-| 8.2 | ^11.0 | `pest --ci`, `phpstan analyse` |
-| 8.2 | ^12.0 | `pest --ci`, `phpstan analyse` |
-| 8.3 | ^11.0 | `pest --ci`, `phpstan analyse` |
-| 8.3 | ^12.0 | `pest --ci`, `phpstan analyse` |
+| 8.4 | ^11.0 | `pest --ci`, `phpstan analyse` |
+| 8.4 | ^12.0 | `pest --ci`, `phpstan analyse` |
+| 8.5 | ^11.0 | `pest --ci`, `phpstan analyse` |
+| 8.5 | ^12.0 | `pest --ci`, `phpstan analyse` |
 
 The workflow runs automatically on every push and pull request to `main`/`master`. The `Tests` badge at the top of this README reflects the latest CI run.
 
