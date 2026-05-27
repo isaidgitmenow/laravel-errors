@@ -2188,3 +2188,59 @@ jobs:
       - run: composer install --no-interaction
       - run: vendor/bin/pest --ci
 ```
+
+---
+
+## 🏗️ Domain Driven Design (DDD) Support
+
+If your application uses a modular architecture via the [tey/laravel-ddd](https://github.com/jaspertey/laravel-ddd) package, you can generate decorated exceptions directly inside your Domain modules instead of the standard `app/Exceptions` folder.
+
+The package provides a dedicated `ddd:error` Artisan command that understands your DDD architecture and respects your `config/ddd.php` paths.
+
+### Basic Usage
+
+You can use the shorthand DDD syntax (`Domain:Class`) to specify where the exception belongs:
+
+```bash
+php artisan ddd:error Invoicing:PaymentFailed
+```
+This will automatically create `src/Domain/Invoicing/Exceptions/PaymentFailed.php` (or wherever your `domain_path` is configured).
+
+### Using the `--domain` Option
+
+If you prefer, you can pass the domain as an explicit option instead of using the shorthand syntax:
+
+```bash
+php artisan ddd:error PaymentFailed --domain=Invoicing
+```
+
+### Full Attribute Support
+
+Just like the standard `make:error` command, `ddd:error` supports all dynamic attributes to scaffold your exception in one line:
+
+```bash
+php artisan ddd:error Invoicing:PaymentFailed --http=402 --report=slack,pagerduty --env=production
+```
+
+This will generate a fully decorated domain exception:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Domain\Invoicing\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+
+#[HttpCode(402)]
+#[ReportTo(['slack', 'pagerduty'], environments: ['production'])]
+class PaymentFailed extends Exception
+{
+    //
+}
+```
+
+> **Note:** The `ddd:error` command requires the `tey/laravel-ddd` package to be installed in your project. If it is missing, the command will gracefully halt and prompt you to install it.
