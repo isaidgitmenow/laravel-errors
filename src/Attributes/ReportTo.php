@@ -12,15 +12,18 @@ use Attribute;
  *
  * Usage:
  * #[ReportTo('slack')]
+ * #[ReportTo('slack', environments: ['production'])]
  * class CriticalPaymentException extends \Exception {}
  */
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class ReportTo
 {
     /**
-     * @param string|string[] $channels One or more log channel names (e.g. 'slack', ['slack', 'sentry'])
+     * @param string|string[] $channels      One or more log channel names (e.g. 'slack', ['slack', 'sentry'])
+     * @param string[]        $environments  Restrict reporting to these environments. Empty = all environments.
      */
     public function __construct(
         public string|array $channels,
+        public array $environments = [],
     ) {}
 }

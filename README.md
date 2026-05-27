@@ -18,6 +18,12 @@ Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**
 - **Auto-Injection into Laravel Context**: Automatically forwards `#[WithContext]` data to downstream trackers like Sentry or Flare via Laravel 11's global `Context`.
 - **Data Sanitization**: Built-in redaction for sensitive keys (like passwords and API tokens) before they hit logs or external trackers.
 - **Anti-Spam Rate Limiting**: Prevent cascading failures from exhausting your error tracker quotas using the `#[RateLimit]` attribute.
+- **Octane Compatible**: Automatically flushes the reflection cache after every request under Swoole / RoadRunner to prevent memory leaks.
+- **Dynamic Pass-Through**: Third-party packages can register exceptions to bypass the pipeline at runtime — no config edits required.
+- **Environment-Specific Reporting**: Restrict `#[ReportTo]` to specific environments (e.g., only send Slack alerts in `production`).
+- **`make:error` Artisan Command**: Scaffold fully decorated exception classes in seconds with `php artisan make:error`.
+- **Static Analysis Ready**: Ships with a `phpstan.neon.dist` pre-configured for [Larastan](https://github.com/larastan/larastan) level 5.
+- **CI/CD Ready**: Includes a GitHub Actions workflow matrix covering PHP 8.2/8.3 × Laravel 11/12.
 
 ## 📦 Requirements
 
@@ -83,6 +89,8 @@ The `ErrorManager` is a singleton bound to the service container. It runs the en
   Allows third-party packages to dynamically prepend custom Detector/Renderer pairs to the pipeline.
 - **`addReporter(string $reporter): static`**
   Allows third-party packages to dynamically prepend custom Reporters to the pipeline.
+- **`passThrough(string $exceptionClass): void`** *(static)*
+  Dynamically registers an exception class to bypass the pipeline entirely. Designed for use by third-party package service providers so their internal exceptions are never captured by your error handler. Unlike the `pass_through` config array, this requires no changes to published config files. See [Dynamic Pass-Through](#-dynamic-pass-through-at-runtime) for details.
 
 ### 3. The Inspector: `ExceptionInspector`
 
@@ -95,7 +103,7 @@ The `ExceptionInspector` utilizes PHP Reflection to recursively traverse the exc
 - **`shouldNotReport(Throwable $e): bool`**
   Returns `true` if the exception is decorated with `#[DontReport]`.
 - **`reportToChannels(Throwable $e): ?array`**
-  Returns the specific log channels defined by `#[ReportTo]`.
+  Returns the specific log channels defined by `#[ReportTo]`. Returns `null` if the attribute has an `environments` restriction and the current environment does not match, effectively suppressing reporting for this request.
 - **`translatedMessage(Throwable $e): ?string`**
   Retrieves and translates the key defined by `#[TranslatedMessage]`. Returns `null` if the translation doesn't exist.
 - **`context(Throwable $e): array`**
@@ -175,15 +183,28 @@ use Isaidgitmenow\LaravelErrors\Attributes\DontReport;
 class UserCancelledActionException extends \Exception {}
 ```
 
-### `#[ReportTo(string|array $channels)]`
+### `#[ReportTo(string|array $channels, array $environments = [])]`
 Routes the exception log to specific logging channels defined in your `config/logging.php`.
 
 ```php
 use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
 
+// Always report to a specific channel:
 #[ReportTo(['slack', 'emergency_file'])]
 class CriticalDatabaseFailureException extends \Exception {}
+
+// Only report in production — silent in staging/local:
+#[ReportTo('slack', environments: ['production'])]
+class BillingGatewayException extends \Exception {}
+
+// Multi-channel, multi-environment:
+#[ReportTo(['slack', 'pagerduty'], environments: ['production', 'staging'])]
+class DatabaseReplicationLagException extends \Exception {}
 ```
+
+When `environments` is non-empty, the `ExceptionInspector` checks `app()->environment($environments)` before returning the channels. If the current environment is not in the list, `reportToChannels()` returns `null` and the `LogReporter` skips sending the report entirely — no noise in local or staging, full alerts in production.
+
+See [Environment-Specific Reporting](#-environment-specific-reporting) for a full walkthrough.
 
 ### `#[TranslatedMessage(string $key)]`
 Provides a user-friendly, translated error message key. Filament, Inertia, and API renderers will prioritize this message to present a safe error to the frontend.
@@ -289,6 +310,12 @@ The package includes a comprehensive test suite (built with Pest and Orchestra T
 
 ```bash
 composer test
+```
+
+Run static analysis with Larastan:
+
+```bash
+composer phpstan
 ```
 
 ## 📜 License
@@ -1070,8 +1097,22 @@ Because this package relies heavily on PHP 8 Attributes, it uses PHP's Reflectio
 
 To guarantee zero performance impact in production, the `ExceptionInspector` utilizes an **in-memory static cache** per-request. Once an exception class is reflected, its attributes are cached. If the same exception is thrown again during the lifecycle of the request, the reflection is skipped and the cached attributes are used instantly.
 
-### Long-Running Processes (Laravel Octane / Tests)
-In typical Laravel requests, the static cache is naturally destroyed at the end of the request. However, in environments that keep the application bootstrapped in memory (like **Laravel Octane**) or during continuous PHPUnit / Pest tests, you might need to flush this cache manually to avoid memory leaks or state bleeding between tests.
+### Automatic Octane Compatibility
+
+Under **Laravel Octane** (Swoole or RoadRunner), the application stays bootstrapped in memory across many requests. Without intervention, the static reflection cache would grow indefinitely — a classic memory leak.
+
+This package automatically handles this for you. The `ErrorsServiceProvider` registers a listener on `\Laravel\Octane\Events\RequestTerminated` that flushes the cache at the end of every request:
+
+```php
+// This happens automatically — no configuration required.
+// The event listener is only registered when laravel/octane is installed.
+ExceptionInspector::flushCache();
+```
+
+There is nothing you need to do. If you install `laravel/octane`, the cache flush is wired up for you. If Octane is not installed, zero overhead is added.
+
+### Manual Cache Flushing (Tests)
+In typical Laravel requests, the static cache is naturally destroyed at the end of the request. However, during continuous PHPUnit / Pest tests, state can bleed between tests if the same exception class is used in multiple tests.
 
 You can manually clear the reflection cache at any time by calling:
 
@@ -1514,6 +1555,34 @@ When the `ErrorManager` encounters an exception that is an `instanceof` any clas
 
 This guarantees that form validation redirects, `$errors` bags, unauthenticated redirects, 403 Forbidden pages, and standard 404 Not Found pages work exactly as they normally do in standard Laravel, without triggering false alarms in your Slack channel or error logs!
 
+### 🔌 Dynamic Pass-Through at Runtime
+
+The `pass_through` config is great for your own application, but it requires editing the published config file. If you are a **package author** and want your internal exceptions to always bypass the pipeline without forcing the user to touch their config, use the static `passThrough()` method:
+
+```php
+// In your package's ServiceProvider boot() method:
+use Isaidgitmenow\LaravelErrors\ErrorManager;
+use Isaidgitmenow\LaravelErrors\Facades\LaravelErrors;
+
+// Via the ErrorManager directly:
+ErrorManager::passThrough(MyVendorInternalException::class);
+
+// Or via the Facade:
+LaravelErrors::passThrough(MyVendorInternalException::class);
+```
+
+This merges your exceptions into the pass-through list at runtime, without requiring the end user to publish and edit `config/errors.php`. The static registry is separate from the config array, so both are always respected.
+
+**Application developers** can also use this for one-off registrations inside `AppServiceProvider::boot()`:
+
+```php
+public function boot(): void
+{
+    // Bypass the pipeline for a third-party exception you cannot decorate
+    LaravelErrors::passThrough(\Vendor\Package\SomeInternalException::class);
+}
+```
+
 ---
 
 ## 🤷‍♂️ Handling Generic (Un-decorated) Exceptions
@@ -1900,3 +1969,222 @@ const error = computed(() => usePage().props.error)
 ```
 
 By viewing exceptions not as "crashes", but as **rich data objects**, this package allows you to build completely seamless, interactive, and self-healing applications!
+
+---
+
+## 🌍 Environment-Specific Reporting
+
+In a typical workflow, you want full Slack/PagerDuty alerts in **production**, but you don't want to be bombarded with notifications while developing locally or running CI against a staging branch.
+
+The `environments` parameter on `#[ReportTo]` handles this elegantly:
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+
+// Only fire Slack alerts in production
+#[ReportTo('slack', environments: ['production'])]
+class PaymentGatewayException extends \Exception {}
+
+// Send to Slack in production AND staging, but not locally
+#[ReportTo(['slack', 'pagerduty'], environments: ['production', 'staging'])]
+class DatabaseReplicationLagException extends \Exception {}
+
+// No restriction: always report (same as before)
+#[ReportTo('slack')]
+class AlwaysReportedException extends \Exception {}
+```
+
+### How it works
+
+When `ExceptionInspector::reportToChannels()` is called by the `LogReporter`, it reads the `environments` list from the attribute. If the list is non-empty, it calls `app()->environment($environments)` against the current `APP_ENV`. If the environment doesn't match, it returns `null` instead of the channel list, and the `LogReporter` skips reporting entirely.
+
+```
+APP_ENV=local  → #[ReportTo('slack', environments: ['production'])] → null (suppressed)
+APP_ENV=production → same attribute → ['slack'] (reported)
+```
+
+### Combining with other attributes
+
+You can freely combine environment filtering with the rest of the attribute API:
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+
+#[HttpCode(503)]
+#[TranslatedMessage('errors.third_party_down')]
+#[WithContext(['provider', 'attemptCount'])]
+#[RateLimit(max: 3, intervalInMinutes: 5)]
+#[ReportTo(['slack', 'emergency_file'], environments: ['production'])]
+class ThirdPartyApiDownException extends \Exception
+{
+    public function __construct(
+        public string $provider,
+        public int $attemptCount,
+        string $message = "Third-party API is unavailable."
+    ) {
+        parent::__construct($message);
+    }
+}
+```
+
+In this example:
+- All environments see the 503 response and the translated message
+- Rate limiting applies everywhere
+- The Slack and emergency file alerts only fire in production
+
+---
+
+## 🛠️ Generating Exceptions: `make:error`
+
+Manually creating exception files and remembering which `use` imports to add is tedious. The `make:error` artisan command scaffolds a fully decorated exception class for you in seconds.
+
+### Basic Usage
+
+```bash
+# Create a plain exception (no attributes)
+php artisan make:error PaymentFailed
+
+# Create with a custom HTTP status code
+php artisan make:error PaymentFailed --http=402
+
+# Create with HTTP code + reporting channel
+php artisan make:error PaymentFailed --http=402 --report=slack
+
+# Full: HTTP code + multi-channel + environment restriction
+php artisan make:error PaymentFailed --http=402 --report=slack,emergency_file --env=production
+```
+
+The command places the generated file in `app/Exceptions/` (respecting sub-namespacing):
+
+```bash
+# Creates app/Exceptions/Payments/PaymentFailed.php
+php artisan make:error Payments/PaymentFailed --http=402 --report=slack --env=production
+```
+
+### Generated Output
+
+Running `php artisan make:error PaymentFailed --http=402 --report=slack --env=production` generates:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+
+#[HttpCode(402)]
+#[ReportTo('slack', environments: ['production'])]
+class PaymentFailed extends Exception
+{
+    //
+}
+```
+
+The command automatically:
+- Adds only the `use` statements for the attributes you requested
+- Correctly formats single vs. multi-channel `#[ReportTo]`
+- Applies the `environments:` named argument when `--env` is provided
+
+### Options Reference
+
+| Option | Default | Description |
+|---|---|---|
+| `{name}` | *(required)* | Class name. Supports `/` for sub-namespacing (e.g. `Billing/CardDeclined`) |
+| `--http` | `500` | HTTP status code for `#[HttpCode]`. Omitted entirely if 500 (the default). |
+| `--report` | *(none)* | Comma-separated channel name(s). Adds `#[ReportTo]`. Omitted if not specified. |
+| `--env` | *(none)* | Comma-separated environment name(s). Adds the `environments:` argument to `#[ReportTo]`. Requires `--report`. |
+
+### Custom Stubs
+
+If you want to customize the generated file template, publish the stub to your application:
+
+```bash
+# Copy the stub to your app's stubs/ directory
+cp vendor/isaidgitmenow/laravel-errors/stubs/error.stub stubs/error.stub
+```
+
+The command automatically detects `stubs/error.stub` in your project root and uses it instead of the package default.
+
+---
+
+## 🔬 Static Analysis with Larastan
+
+The package ships with a pre-configured `phpstan.neon.dist` file so you can run type-safe analysis on your error-handling code with zero setup.
+
+### Running Analysis
+
+```bash
+# Via the Composer script:
+composer phpstan
+
+# Or directly:
+vendor/bin/phpstan analyse --memory-limit=512M
+```
+
+The configuration targets `src/` at **PHPStan level 5** with the Larastan extension loaded for Laravel-aware type inference. It pre-suppresses errors from optional dependencies (`Debugbar`, `Filament`) that may not be installed in your dev environment.
+
+### Installing Larastan in Your Application
+
+If you want to run Larastan across your own application code (not just this package), install it separately:
+
+```bash
+composer require larastan/larastan --dev
+```
+
+Then create a `phpstan.neon` in your application root:
+
+```neon
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app
+        - src
+```
+
+---
+
+## 🤖 Continuous Integration (GitHub Actions)
+
+The package ships with a ready-to-use GitHub Actions workflow at `.github/workflows/run-tests.yml`. It covers:
+
+| PHP | Laravel | What runs |
+|---|---|---|
+| 8.2 | ^11.0 | `pest --ci`, `phpstan analyse` |
+| 8.2 | ^12.0 | `pest --ci`, `phpstan analyse` |
+| 8.3 | ^11.0 | `pest --ci`, `phpstan analyse` |
+| 8.3 | ^12.0 | `pest --ci`, `phpstan analyse` |
+
+The workflow runs automatically on every push and pull request to `main`/`master`. The `Tests` badge at the top of this README reflects the latest CI run.
+
+### Using the Workflow in Your Fork / Package
+
+The workflow is already committed at `.github/workflows/run-tests.yml`. If you fork the package or base a new package on it, push to GitHub and CI will start automatically — no configuration needed.
+
+If you want to add CI to your own **application** that uses this package, the simplest setup is:
+
+```yaml
+# .github/workflows/tests.yml
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction
+      - run: vendor/bin/pest --ci
+```

@@ -81,14 +81,23 @@ final class ExceptionInspector
 
     /**
      * Get the target reporting channels, if any.
+     * Returns null if the attribute is restricted to environments that don't match the current one.
      *
      * @return string[]|null
      */
     public static function reportToChannels(Throwable $e): ?array
     {
-        $channels = static::attributes(static::origin($e))['report_to'] ?? null;
+        $attrs = static::attributes(static::origin($e));
+
+        $channels = $attrs['report_to'] ?? null;
 
         if ($channels === null) {
+            return null;
+        }
+
+        // Environment filtering: if environments are specified, suppress in non-matching environments.
+        $environments = $attrs['report_to_environments'] ?? [];
+        if (!empty($environments) && !app()->environment($environments)) {
             return null;
         }
 
@@ -197,7 +206,9 @@ final class ExceptionInspector
         // #[ReportTo]
         $reportToAttrs = $reflection->getAttributes(ReportTo::class);
         if (!empty($reportToAttrs)) {
-            $data['report_to'] = $reportToAttrs[0]->newInstance()->channels;
+            $instance = $reportToAttrs[0]->newInstance();
+            $data['report_to'] = $instance->channels;
+            $data['report_to_environments'] = $instance->environments;
         }
 
         // #[TranslatedMessage]

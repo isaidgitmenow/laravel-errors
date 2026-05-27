@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Exception;
+{{ use_statements }}
+{{ class_attributes }}
+class {{ class }} extends Exception
+{
+    //
+}

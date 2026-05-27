@@ -1,0 +1,24 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+
+    phpVersion: 80400
+
+    ignoreErrors:
+        # Optional dependencies not installed during dev/CI
+        - message: '#on an unknown class Barryvdh\\Debugbar\\#'
+          reportUnmatched: false
+        - message: '#on an unknown class Filament\\#'
+          reportUnmatched: false
+
+        # Pre-existing: renderers/reporters that never return null (interface requires nullable)
+        - message: '#never returns null so it can be removed from the return type#'
+          reportUnmatched: false
+
+        # Pre-existing: DebugbarReporter stores config for future use but currently unused
+        - message: '#Property.*DebugbarReporter::\$config is never read, only written#'
+          reportUnmatched: false

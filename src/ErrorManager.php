@@ -26,6 +26,14 @@ use Throwable;
 final class ErrorManager
 {
     /**
+     * Dynamically registered pass-through exceptions.
+     * Third-party packages call ErrorManager::passThrough(MyException::class) to register here.
+     *
+     * @var array<class-string<\Throwable>>
+     */
+    private static array $dynamicPassThrough = [];
+
+    /**
      * Dynamically registered contexts (e.g. from third-party packages).
      * These are prepended before the config-defined contexts.
      *
@@ -157,13 +165,26 @@ final class ErrorManager
     }
 
     /**
+     * Dynamically register an exception class to bypass the pipeline entirely.
+     * Designed for use by third-party packages so users don't need to edit config.
+     *
+     * @param class-string<\Throwable> $exceptionClass
+     */
+    public static function passThrough(string $exceptionClass): void
+    {
+        self::$dynamicPassThrough[] = $exceptionClass;
+    }
+
+    /**
      * Determine if this exception should bypass our pipeline entirely.
      */
     private function isPassThrough(Throwable $e): bool
     {
         $origin = ExceptionInspector::origin($e);
 
-        foreach ($this->config['pass_through'] ?? [] as $class) {
+        $classList = array_merge($this->config['pass_through'] ?? [], self::$dynamicPassThrough);
+
+        foreach ($classList as $class) {
             if ($origin instanceof $class || $e instanceof $class) {
                 return true;
             }

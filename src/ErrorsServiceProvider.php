@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Isaidgitmenow\LaravelErrors;
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Isaidgitmenow\LaravelErrors\Console\Commands\MakeExceptionCommand;
 use Isaidgitmenow\LaravelErrors\Reporters\DebugbarReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\LogReporter;
 use Spatie\LaravelPackageTools\Package;
@@ -15,7 +17,8 @@ class ErrorsServiceProvider extends PackageServiceProvider
     {
         $package
             ->name('laravel-errors')
-            ->hasConfigFile('errors');
+            ->hasConfigFile('errors')
+            ->hasCommand(MakeExceptionCommand::class);
     }
 
     public function packageRegistered(): void
@@ -40,5 +43,21 @@ class ErrorsServiceProvider extends PackageServiceProvider
                 config: $app['config']->get('errors', []),
             );
         });
+    }
+
+    public function packageBooted(): void
+    {
+        // Octane Compatibility: flush the static reflection cache after every request
+        // to prevent memory leaks under Swoole / RoadRunner long-running processes.
+        if (class_exists(\Laravel\Octane\Events\RequestTerminated::class)) {
+            /** @var Dispatcher $events */
+            $events = $this->app->make(Dispatcher::class);
+            $events->listen(
+                \Laravel\Octane\Events\RequestTerminated::class,
+                static function (): void {
+                    ExceptionInspector::flushCache();
+                }
+            );
+        }
     }
 }
