@@ -31,19 +31,19 @@ class MakeDddErrorCommand extends Command
     /** Force the command to behave as if laravel-ddd IS available (test helper). */
     public static function fake(): void
     {
-        static::$fakeAvailable = true;
+        self::$fakeAvailable = true;
     }
 
     /** Force the command to behave as if laravel-ddd is NOT available (test helper). */
     public static function fakeUnavailable(): void
     {
-        static::$fakeAvailable = false;
+        self::$fakeAvailable = false;
     }
 
     /** Restore real runtime availability detection. */
     public static function unfake(): void
     {
-        static::$fakeAvailable = null;
+        self::$fakeAvailable = null;
     }
 
     protected $signature = 'ddd:error
@@ -258,8 +258,8 @@ class MakeDddErrorCommand extends Command
      */
     protected function isLaravelDddAvailable(): bool
     {
-        if (static::$fakeAvailable !== null) {
-            return static::$fakeAvailable;
+        if (self::$fakeAvailable !== null) {
+            return self::$fakeAvailable;
         }
 
         // The canonical class shipped by tey/laravel-ddd
