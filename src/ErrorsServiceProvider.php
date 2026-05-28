@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Isaidgitmenow\LaravelErrors;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Isaidgitmenow\LaravelErrors\Console\Commands\MakeDddErrorCommand;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeExceptionCommand;
 use Isaidgitmenow\LaravelErrors\Reporters\DebugbarReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\LogReporter;
@@ -18,7 +19,8 @@ class ErrorsServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-errors')
             ->hasConfigFile('errors')
-            ->hasCommand(MakeExceptionCommand::class);
+            ->hasCommand(MakeExceptionCommand::class)
+            ->hasCommand(MakeDddErrorCommand::class);
     }
 
     public function packageRegistered(): void

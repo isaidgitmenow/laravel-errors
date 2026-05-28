@@ -304,6 +304,86 @@ class UserRateLimitedException extends \Exception
 }
 ```
 
+## 🏛️ Domain Driven Design (DDD) Support
+
+If your project uses [`tey/laravel-ddd`](https://github.com/lunarstorm/laravel-ddd) to organise code into domain modules, this package ships a companion command — `ddd:error` — that places generated exception classes directly inside the correct domain directory and namespace.
+
+### Prerequisites
+
+Install the `tey/laravel-ddd` package:
+
+```bash
+composer require tey/laravel-ddd
+```
+
+If the package is absent at runtime, `ddd:error` will exit gracefully with a friendly installation prompt — no fatal errors.
+
+### Generating a Domain Exception
+
+**Shorthand syntax** — prefix the class name with the domain separated by a colon:
+
+```bash
+php artisan ddd:error Invoicing:PaymentFailed
+```
+
+**Flag syntax** — use the `--domain` option:
+
+```bash
+php artisan ddd:error PaymentFailed --domain=Invoicing
+```
+
+Both variants produce the same result. The `--domain` flag takes precedence if both are given.
+
+### Generated File Location
+
+The command resolves the output path from `config('ddd.domain_path')` (default: `src/Domain`) and `config('ddd.domain_namespace')` (default: `Domain`):
+
+| Config key | Default | Example output path |
+|---|---|---|
+| `ddd.domain_path` | `src/Domain` | `src/Domain/Invoicing/Exceptions/PaymentFailed.php` |
+| `ddd.domain_namespace` | `Domain` | `namespace Domain\Invoicing\Exceptions;` |
+
+You can override these values in your published `config/ddd.php`.
+
+### Options
+
+All options from `make:error` are supported:
+
+| Option | Description | Default |
+|---|---|---|
+| `--domain=` | Domain module name (e.g. `Invoicing`) | *(required)* |
+| `--http=` | HTTP status code for `#[HttpCode]` | `500` (attribute omitted) |
+| `--report=` | Comma-separated reporting channels | none |
+| `--env=` | Comma-separated environments for `#[ReportTo]` | none |
+
+### Full Example
+
+```bash
+php artisan ddd:error Invoicing:PaymentFailed --http=402 --report=slack --env=production
+```
+
+Generates `src/Domain/Invoicing/Exceptions/PaymentFailed.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Domain\Invoicing\Exceptions;
+
+use Exception;
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+#[HttpCode(402)]
+#[ReportTo('slack', environments: ['production'])]
+class PaymentFailed extends Exception
+{
+    //
+}
+```
+
+---
+
 ## 🧪 Testing
 
 The package includes a comprehensive test suite (built with Pest and Orchestra Testbench).
