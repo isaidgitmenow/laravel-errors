@@ -48,7 +48,7 @@ describe('LivewireDetector', function () {
     it('detects Livewire requests via header', function () {
         $request = Request::create('/livewire/update', 'POST');
         $request->headers->set('X-Livewire', 'true');
-        expect((new LivewireDetector())->detect(new RuntimeException(), $request))->toBeFalse(); // Livewire class not installed in tests
+        expect((new LivewireDetector())->detect(new \RuntimeException(), $request))->toBeTrue();
     });
 });
 
@@ -56,7 +56,7 @@ describe('InertiaDetector', function () {
     it('detects Inertia requests via header', function () {
         $request = Request::create('/dashboard', 'GET');
         $request->headers->set('X-Inertia', 'true');
-        expect((new InertiaDetector())->detect(new RuntimeException(), $request))->toBeFalse(); // Inertia class not installed in tests
+        expect((new InertiaDetector())->detect(new \RuntimeException(), $request))->toBeTrue();
     });
 });
 
@@ -110,8 +110,8 @@ describe('ErrorManager', function () {
         $request = Request::create('/livewire/update', 'POST');
         $request->headers->set('X-Livewire', 'true');
 
-        $result = $manager->render(new RuntimeException(), $request);
-        expect($result)->toBeNull();
+        $result = $manager->render(new \RuntimeException(), $request);
+        expect($result)->toBeInstanceOf(\Illuminate\Http\JsonResponse::class);
 
         app()['config']->set('app.debug', false);
     });
