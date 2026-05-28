@@ -131,12 +131,23 @@ final class ExceptionInspector
     public static function context(Throwable $e): array
     {
         $origin = static::origin($e);
-        $properties = static::attributes($origin)['with_context'] ?? [];
+        $attrs  = static::attributes($origin);
         $context = [];
 
-        foreach ($properties as $property) {
+        // Class-level #[WithContext]: extract named public properties
+        foreach ($attrs['with_context'] ?? [] as $property) {
             if (property_exists($origin, $property)) {
                 $context[$property] = $origin->{$property};
+            }
+        }
+
+        // Method-level #[WithContext]: invoke the method and merge the returned array
+        foreach ($attrs['with_context_methods'] ?? [] as $method) {
+            if (method_exists($origin, $method)) {
+                $result = $origin->{$method}();
+                if (is_array($result)) {
+                    $context = array_merge($context, $result);
+                }
             }
         }
 
@@ -166,8 +177,16 @@ final class ExceptionInspector
             RateLimit::class,
         ];
 
+        // Check class-level attributes
         foreach ($ourAttributes as $attributeClass) {
             if (!empty($reflection->getAttributes($attributeClass))) {
+                return true;
+            }
+        }
+
+        // Also check public methods for method-level #[WithContext]
+        foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            if (!empty($method->getAttributes(WithContext::class))) {
                 return true;
             }
         }
@@ -217,10 +236,21 @@ final class ExceptionInspector
             $data['translated_message'] = $translatedAttrs[0]->newInstance()->key;
         }
 
-        // #[WithContext]
+        // #[WithContext] — class level (property list)
         $withContextAttrs = $reflection->getAttributes(WithContext::class);
         if (!empty($withContextAttrs)) {
             $data['with_context'] = $withContextAttrs[0]->newInstance()->properties;
+        }
+
+        // #[WithContext] — method level (callable returning array)
+        $withContextMethods = [];
+        foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            if (!empty($method->getAttributes(WithContext::class))) {
+                $withContextMethods[] = $method->getName();
+            }
+        }
+        if (!empty($withContextMethods)) {
+            $data['with_context_methods'] = $withContextMethods;
         }
 
         // #[RateLimit]

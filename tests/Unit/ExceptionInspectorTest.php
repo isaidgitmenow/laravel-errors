@@ -30,6 +30,15 @@ class ContextualException extends RuntimeException
     public int $order_id = 42;
 }
 
+class MethodContextualException extends RuntimeException
+{
+    #[WithContext]
+    public function gatherIntel(): array
+    {
+        return ['intel_level' => 9000];
+    }
+}
+
 #[RateLimit(max: 5, intervalInMinutes: 1)]
 class RateLimitedException extends RuntimeException {}
 
@@ -80,9 +89,14 @@ describe('ExceptionInspector', function () {
         expect($data['translated_message'])->toBe('errors.custom');
     });
 
-    it('extracts context properties from the exception', function () {
+    it('extracts context properties from the exception class', function () {
         $context = ExceptionInspector::context(new ContextualException());
         expect($context)->toBe(['order_id' => 42]);
+    });
+
+    it('extracts context properties from exception methods', function () {
+        $context = ExceptionInspector::context(new MethodContextualException());
+        expect($context)->toBe(['intel_level' => 9000]);
     });
 
     it('returns empty context when WithContext is absent', function () {
