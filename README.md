@@ -1,4 +1,4 @@
-﻿# Laravel Errors 🚨
+# Laravel Errors 🚨
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/isaidgitmenow/laravel-errors.svg?style=flat-square)](https://packagist.org/packages/isaidgitmenow/laravel-errors)
 [![Total Downloads](https://img.shields.io/packagist/dt/isaidgitmenow/laravel-errors.svg?style=flat-square)](https://packagist.org/packages/isaidgitmenow/laravel-errors)
@@ -15,6 +15,7 @@ Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**
 - **Bulletproof Resilience**: Includes a self-healing `try/catch` wrapper so an error in your error handler never causes a White Screen of Death (WSOD).
 - **Deep Attribute Inspection**: Safely traverses Laravel's wrapped exceptions (e.g., `QueryException`, `ViewException`) to find and apply your custom attributes on the original exception.
 - **Spatie Ignition & Laravel Debugbar Ready**: Seamlessly integrates with local developer tools without breaking production flows.
+- **Xdebug IDE Enrichment**: Push sanitized `#[WithContext]` payloads directly to your IDE as debug notifications.
 - **Auto-Injection into Laravel Context**: Automatically forwards `#[WithContext]` data to downstream trackers like Sentry or Flare via Laravel 11's global `Context`.
 - **Data Sanitization**: Built-in redaction for sensitive keys (like passwords and API tokens) before they hit logs or external trackers.
 - **Anti-Spam Rate Limiting**: Prevent cascading failures from exhausting your error tracker quotas using the `#[RateLimit]` attribute.
@@ -90,6 +91,7 @@ For detailed usage and advanced configuration, please refer to the specific docu
 - 🦉 NightWatch Integration Example
 - 💥 Flare (or Sentry) Integration
 - 🐛 Laravel Debugbar Integration Example
+- 🐞 Xdebug IDE Enrichment
 - 🔀 Routing to Different Log Channels
 - 🌍 Environment-Specific Reporting
 

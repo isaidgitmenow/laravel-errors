@@ -8,6 +8,8 @@ Reporters determine how errors are logged or sent to external trackers (like Sen
   Uses Laravel's core `Log` facade. It respects the `#[ReportTo]` attribute to route the error to specific channels (e.g., slack, single, daily). If not specified, it falls back to the default logger.
 - **`DebugbarReporter`**:
   Integrates with `barryvdh/laravel-debugbar`. It forces exceptions marked with `#[DontReport]` to still appear in the Debugbar's 'Exceptions' tab locally. It also dumps the sanitized `#[WithContext]` data directly into the 'Messages' tab.
+- **`XdebugReporter`**:
+  A silent, purely local reporter that pushes `#[WithContext]` data directly to your IDE via `xdebug_notify()`. It bypasses rate limiting, ensuring you see the payload every time you refresh during debugging.
 - **`RateLimitedReporter`**:
   A dynamic proxy wrapper. The `ErrorManager` automatically wraps any reporter with this class if the exception carries the `#[RateLimit]` attribute. It uses Laravel's `RateLimiter` facade to suppress duplicate logs within the specified interval, saving API quota for Sentry/Flare.
 
@@ -207,6 +209,32 @@ class UserCancelledActionException extends \Exception {}
 ```
 
 If this exception occurs, your `laravel.log` stays clean, but the exception will still appear with its full stack trace in the **Exceptions** tab of the Debugbar, ensuring you never miss a silent failure while coding!
+
+---
+
+
+---
+
+## 🐞 Xdebug IDE Enrichment
+
+If you use Xdebug 3 for local development, you can leverage the `XdebugReporter` to push `#[WithContext]` payloads directly into your IDE's debugging UI.
+
+### How it works
+
+When an exception with `#[WithContext]` is thrown during a local request (`APP_DEBUG=true`), the package calls the native `xdebug_notify()` function. This sends a custom notification straight to your IDE (like PhpStorm or VS Code) containing the fully sanitized context.
+
+Unlike logs or the Debugbar, this requires **zero browser interaction**. The moment the exception occurs, a popup or debug variable will appear in your IDE with the exact state of the failure!
+
+### Configuration
+
+It is enabled by default. To disable it, simply set the `enrich_xdebug` key to `false` in your published `config/errors.php` file:
+
+```php
+// config/errors.php
+'enrich_xdebug' => false,
+```
+
+*(Note: The Xdebug reporter automatically bypasses rate limiting, so you won't lose notifications if you repeatedly refresh a failing page while debugging.)*
 
 ---
 

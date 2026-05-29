@@ -119,6 +119,20 @@ class InternalTrackerReporter implements ErrorReporterInterface
 }
 ```
 
+#### Bypassing Rate Limits for Local Reporters
+
+If your custom reporter is designed purely for local developer tooling (like dumping data to a console or IDE) and you want it to **always** fire even when rate limits are exceeded, simply implement the `BypassesRateLimiting` marker interface:
+
+```php
+use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\BypassesRateLimiting;
+
+class LocalConsoleReporter implements ErrorReporterInterface, BypassesRateLimiting
+{
+    // ...
+}
+```
+
 ### 3. Registering the Extensions
 
 You can inject your custom logic into the pipeline dynamically. The best place to do this is in the `boot` method of your `AppServiceProvider` (or a dedicated service provider).

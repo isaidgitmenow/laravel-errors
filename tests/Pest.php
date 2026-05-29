@@ -96,3 +96,30 @@ namespace Livewire {
         class Livewire {}
     }
 }
+
+// --- XDEBUG FAKE ---
+// Declared in the reporter's own namespace so PHP resolves the unqualified
+// xdebug_notify() call there without needing Xdebug installed.
+namespace Isaidgitmenow\LaravelErrors\Reporters {
+    if (!function_exists('Isaidgitmenow\LaravelErrors\Reporters\xdebug_notify')) {
+        /** @param mixed $value */
+        function xdebug_notify(mixed $value): void
+        {
+            XdebugReporterTestSpy::$calls[] = $value;
+        }
+    }
+
+    if (!class_exists('Isaidgitmenow\LaravelErrors\Reporters\XdebugReporterTestSpy')) {
+        /** Collects xdebug_notify() calls for assertions in XdebugReporterTest. */
+        class XdebugReporterTestSpy
+        {
+            /** @var array<int, mixed> */
+            public static array $calls = [];
+
+            public static function flush(): void
+            {
+                self::$calls = [];
+            }
+        }
+    }
+}

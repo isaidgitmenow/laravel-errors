@@ -9,6 +9,7 @@ use Isaidgitmenow\LaravelErrors\Console\Commands\MakeDddErrorCommand;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeExceptionCommand;
 use Isaidgitmenow\LaravelErrors\Reporters\DebugbarReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\LogReporter;
+use Isaidgitmenow\LaravelErrors\Reporters\XdebugReporter;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -42,6 +43,12 @@ class ErrorsServiceProvider extends PackageServiceProvider
 
         $this->app->bind(DebugbarReporter::class, function ($app) {
             return new DebugbarReporter(
+                config: $app['config']->get('errors', []),
+            );
+        });
+
+        $this->app->bind(XdebugReporter::class, function ($app) {
+            return new XdebugReporter(
                 config: $app['config']->get('errors', []),
             );
         });

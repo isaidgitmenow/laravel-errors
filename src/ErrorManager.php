@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Context;
 use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\BypassesRateLimiting;
 use Isaidgitmenow\LaravelErrors\Reporters\RateLimitedReporter;
 use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
 use Symfony\Component\HttpFoundation\Response;
@@ -263,6 +264,12 @@ final class ErrorManager
     private function wrapWithRateLimit(mixed $reporter, Throwable $e): mixed
     {
         if (!$reporter instanceof ErrorReporterInterface) {
+            return $reporter;
+        }
+
+        // Reporters that opt out of rate-limiting (e.g. XdebugReporter, DebugbarReporter)
+        // must always fire on every exception so developers never miss a notification.
+        if ($reporter instanceof BypassesRateLimiting) {
             return $reporter;
         }
 

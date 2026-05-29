@@ -21,6 +21,7 @@ use Isaidgitmenow\LaravelErrors\Renderers\LivewireRenderer;
 use Isaidgitmenow\LaravelErrors\Renderers\WebRenderer;
 use Isaidgitmenow\LaravelErrors\Reporters\DebugbarReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\LogReporter;
+use Isaidgitmenow\LaravelErrors\Reporters\XdebugReporter;
 
 return [
 
@@ -34,6 +35,17 @@ return [
     | for Livewire, Inertia, and Filament.
     */
     'respect_debug_mode' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Xdebug IDE Enrichment
+    |--------------------------------------------------------------------------
+    | When true, XdebugReporter will push #[WithContext] payloads directly to
+    | your IDE via xdebug_notify(). This is a purely local, zero-friction
+    | feature: it requires APP_DEBUG=true and Xdebug 3 to be installed.
+    | No .env variable is needed — toggle this key when publishing the config.
+    */
+    'enrich_xdebug' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -81,6 +93,7 @@ return [
     | You can add custom reporters that implement ErrorReporterInterface.
     */
     'reporters' => [
+        XdebugReporter::class,
         DebugbarReporter::class,
         LogReporter::class,
     ],
