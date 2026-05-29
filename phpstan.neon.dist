@@ -22,3 +22,12 @@ parameters:
         # Pre-existing: DebugbarReporter stores config for future use but currently unused
         - message: '#Property.*DebugbarReporter::\$config is never read, only written#'
           reportUnmatched: false
+
+        # Xdebug is an optional extension not present in CI — suppress the unknown function error.
+        # The call is guarded at runtime by function_exists('xdebug_notify').
+        - message: '#Function xdebug_notify not found#'
+          reportUnmatched: false
+
+        # XdebugReporter stores config for future use (same pattern as DebugbarReporter)
+        - message: '#Property.*XdebugReporter::\$config is never read, only written#'
+          reportUnmatched: false
