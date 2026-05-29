@@ -6,7 +6,20 @@ namespace {
     use Isaidgitmenow\LaravelErrors\Tests\TestCase;
 
     uses(TestCase::class)->in(__DIR__);
+
+    // Global fake for xdebug_notify so that function_exists('xdebug_notify') returns true
+    // in CI environments where Xdebug is not installed.
+    // PHP namespace resolution gives priority to the namespace-scoped fake in
+    // Isaidgitmenow\LaravelErrors\Reporters, so the actual reporter calls that one.
+    // This global version purely satisfies the function_exists() guard in shouldReport().
+    if (!function_exists('xdebug_notify')) {
+        function xdebug_notify(mixed $value): void
+        {
+            \Isaidgitmenow\LaravelErrors\Reporters\XdebugReporterTestSpy::$calls[] = $value;
+        }
+    }
 }
+
 
 // --- DYNAMIC FAKES FOR THIRD PARTY PACKAGES ---
 
