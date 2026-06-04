@@ -10,6 +10,7 @@ use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\BypassesRateLimiting;
+use Isaidgitmenow\LaravelErrors\Contracts\ReportsIgnoredExceptions;
 use Isaidgitmenow\LaravelErrors\Reporters\RateLimitedReporter;
 use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
 use Symfony\Component\HttpFoundation\Response;
@@ -59,25 +60,29 @@ final class ErrorManager
     public function report(Throwable $e): void
     {
         try {
-            // Skip exceptions that should not be reported
-            if (ExceptionInspector::shouldNotReport($e)) {
-                // Still send to Debugbar locally so developers don't miss it
-                $this->runDebugbarReport($e);
-                return;
+            $shouldNotReport = ExceptionInspector::shouldNotReport($e);
+
+            if (!$shouldNotReport) {
+                // FIX #1: Inject #[WithContext] data into Laravel's global Context.
+                // This enriches any downstream reporter (Sentry, Flare, etc.) automatically.
+                $this->injectLaravelContext($e);
             }
 
-            // FIX #1: Inject #[WithContext] data into Laravel's global Context.
-            // This enriches any downstream reporter (Sentry, Flare, etc.) automatically.
-            $this->injectLaravelContext($e);
-
             foreach ($this->getReporters() as $reporterClass) {
-                // FIX #3: Automatically wrap each reporter with RateLimitedReporter
-                // if the exception carries the #[RateLimit] attribute.
-                $reporter = $this->wrapWithRateLimit(app($reporterClass), $e);
+                $baseReporter = app($reporterClass);
 
-                if (!$reporter instanceof ErrorReporterInterface) {
+                if (!$baseReporter instanceof ErrorReporterInterface) {
                     continue;
                 }
+
+                // If the exception shouldn't be reported, skip reporters unless they explicitly opt-in
+                if ($shouldNotReport && !$baseReporter instanceof ReportsIgnoredExceptions) {
+                    continue;
+                }
+
+                // FIX #3: Automatically wrap each reporter with RateLimitedReporter
+                // if the exception carries the #[RateLimit] attribute.
+                $reporter = $this->wrapWithRateLimit($baseReporter, $e);
 
                 if (!$reporter->shouldReport($e)) {
                     continue;
@@ -290,15 +295,7 @@ final class ErrorManager
         return new RateLimitedReporter($reporter);
     }
 
-    /**
-     * Send the exception to Debugbar if available (for DontReport exceptions in dev).
-     */
-    private function runDebugbarReport(Throwable $e): void
-    {
-        if (class_exists(\Barryvdh\Debugbar\Facades\Debugbar::class) && app()->hasDebugModeEnabled()) {
-            \Barryvdh\Debugbar\Facades\Debugbar::addThrowable($e);
-        }
-    }
+
 
     /**
      * Get the merged ordered context pipeline (custom first, then config).

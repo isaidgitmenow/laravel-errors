@@ -33,6 +33,11 @@ describe('DebugbarReporter', function () {
         expect($reporter)->toBeInstanceOf(BypassesRateLimiting::class);
     });
 
+    it('implements ReportsIgnoredExceptions', function () {
+        $reporter = new DebugbarReporter();
+        expect($reporter)->toBeInstanceOf(\Isaidgitmenow\LaravelErrors\Contracts\ReportsIgnoredExceptions::class);
+    });
+
     it('shouldReport requires debug mode', function () {
         app()['config']->set('app.debug', false);
         $reporter = new DebugbarReporter();

@@ -6,6 +6,7 @@ namespace Isaidgitmenow\LaravelErrors\Reporters;
 
 use Isaidgitmenow\LaravelErrors\Contracts\BypassesRateLimiting;
 use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\ReportsIgnoredExceptions;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
 use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
 use Throwable;
@@ -22,7 +23,7 @@ use Throwable;
  *
  * Requires: barryvdh/laravel-debugbar
  */
-final class DebugbarReporter implements ErrorReporterInterface, BypassesRateLimiting
+final class DebugbarReporter implements ErrorReporterInterface, BypassesRateLimiting, ReportsIgnoredExceptions
 {
     public function __construct(
         private readonly array $config = [],
