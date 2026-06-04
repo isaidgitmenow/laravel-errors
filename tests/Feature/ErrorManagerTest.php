@@ -21,10 +21,8 @@ use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     ExceptionInspector::flushCache();
-    // Reset the static dynamic pass-through list between tests
-    $reflection = new ReflectionProperty(ErrorManager::class, 'dynamicPassThrough');
-    $reflection->setAccessible(true);
-    $reflection->setValue(null, []);
+    ErrorManager::flushPassThrough();
+    Cache::flush();
 });
 
 describe('ApiDetector', function () {

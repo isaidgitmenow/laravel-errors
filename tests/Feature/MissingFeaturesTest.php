@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
@@ -30,7 +31,10 @@ class SensitiveContextException extends RuntimeException
 #[RateLimit(max: 2, intervalInMinutes: 1)]
 class RateLimitedManagerException extends RuntimeException {}
 
-beforeEach(fn () => ExceptionInspector::flushCache());
+beforeEach(function () {
+    ExceptionInspector::flushCache();
+    Cache::flush();
+});
 
 describe('Fix #1: Laravel Context Injection', function () {
 

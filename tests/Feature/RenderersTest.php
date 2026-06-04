@@ -89,4 +89,37 @@ describe('DataSanitizer', function () {
         expect($sanitized['API_TOKEN'])->toBe('[REDACTED]');
     });
 
+    it('converts Closures to a safe string representation', function () {
+        $data = [
+            'callback' => fn () => 'test',
+            'name'     => 'John',
+        ];
+
+        $sanitized = DataSanitizer::sanitize($data, []);
+
+        expect($sanitized['callback'])->toBe('[Closure]');
+        expect($sanitized['name'])->toBe('John');
+    });
+
+    it('converts Stringable objects to their string value', function () {
+        $stringable = new class implements \Stringable {
+            public function __toString(): string
+            {
+                return 'stringable-value';
+            }
+        };
+
+        $data = ['item' => $stringable];
+        $sanitized = DataSanitizer::sanitize($data, []);
+
+        expect($sanitized['item'])->toBe('stringable-value');
+    });
+
+    it('converts regular objects to their class name', function () {
+        $data = ['obj' => new \stdClass()];
+        $sanitized = DataSanitizer::sanitize($data, []);
+
+        expect($sanitized['obj'])->toBe('[stdClass]');
+    });
+
 });

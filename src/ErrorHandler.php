@@ -6,6 +6,7 @@ namespace Isaidgitmenow\LaravelErrors;
 
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The public-facing facade for bootstrapping the package.
@@ -29,6 +30,20 @@ final class ErrorHandler
             /** @var ErrorManager $manager */
             $manager = app(ErrorManager::class);
             $manager->report($e);
+
+            // Safety net: if no reporters are configured at all, fall back to
+            // Laravel's default logger so exceptions are never silently swallowed.
+            // The .stop() below prevents Laravel's default handler from running,
+            // so we must ensure at least one logging path exists.
+            $config = config('errors', []);
+            $reporters = array_merge($config['reporters'] ?? [], []);
+            if (empty($reporters)) {
+                Log::error($e->getMessage(), [
+                    'exception' => $e::class,
+                    'file'      => $e->getFile(),
+                    'line'      => $e->getLine(),
+                ]);
+            }
         })->stop();
         // .stop() tells Laravel NOT to pass this to the default logger after our reporter runs.
         // Our LogReporter handles logging internally for full control.

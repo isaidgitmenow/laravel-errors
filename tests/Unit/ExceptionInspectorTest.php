@@ -130,4 +130,41 @@ describe('ExceptionInspector', function () {
         expect(ExceptionInspector::httpCode($e))->toBe(402);
     });
 
+    it('filters ReportTo channels by environment', function () {
+        // ProdOnlyCriticalException is defined below with environments: ['production']
+        $e = new ProdOnlyCriticalException();
+
+        // In testing environment (not production), channels should be suppressed
+        expect(app()->environment('production'))->toBeFalse();
+        expect(ExceptionInspector::reportToChannels($e))->toBeNull();
+    });
+
+    it('allows ReportTo channels when environment matches', function () {
+        $e = new ProdOnlyCriticalException();
+
+        // Temporarily set environment to production
+        app()->detectEnvironment(fn () => 'production');
+        expect(ExceptionInspector::reportToChannels($e))->toBe(['slack']);
+        // Reset
+        app()->detectEnvironment(fn () => 'testing');
+    });
+
+    it('returns translated message when translation exists', function () {
+        // Register a translator entry for the test
+        app('translator')->addLines(['errors.test_message' => 'Something went wrong, please try again.'], 'en');
+
+        $e = new TranslatedException();
+
+        // Override the key to match our test translation
+        $result = ExceptionInspector::translatedMessage(new TranslatedWithRealKeyException());
+        expect($result)->toBe('Something went wrong, please try again.');
+    });
+
 });
+
+// Additional fixtures for environment filtering and translation tests
+#[ReportTo('slack', environments: ['production'])]
+class ProdOnlyCriticalException extends RuntimeException {}
+
+#[TranslatedMessage('errors.test_message')]
+class TranslatedWithRealKeyException extends RuntimeException {}

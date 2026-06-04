@@ -10,7 +10,6 @@ use Isaidgitmenow\LaravelErrors\ErrorManager;
 /**
  * @method static \Isaidgitmenow\LaravelErrors\ErrorManager addContext(string $detector, string $renderer)
  * @method static \Isaidgitmenow\LaravelErrors\ErrorManager addReporter(string $reporter)
- * @method static void passThrough(string $exceptionClass)
  * @method static void report(\Throwable $e)
  * @method static \Symfony\Component\HttpFoundation\Response|null render(\Throwable $e, \Illuminate\Http\Request $request)
  *

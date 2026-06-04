@@ -26,6 +26,14 @@ final class DataSanitizer
                 $result[$key] = self::REDACTED;
             } elseif (is_array($value)) {
                 $result[$key] = static::sanitize($value, $sensitiveKeys);
+            } elseif ($value instanceof \Closure) {
+                $result[$key] = '[Closure]';
+            } elseif (is_object($value)) {
+                // Convert objects to a safe string representation.
+                // Stringable objects get their string value; others get their class name.
+                $result[$key] = $value instanceof \Stringable
+                    ? (string) $value
+                    : '[' . $value::class . ']';
             } else {
                 $result[$key] = $value;
             }

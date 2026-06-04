@@ -27,6 +27,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | ⚠️  Config Caching Compatibility
+    |--------------------------------------------------------------------------
+    | This config file supports Closure values (json_formatter, livewire_handler,
+    | filament_handler). Closures CANNOT be serialized by `php artisan config:cache`.
+    |
+    | If you need config caching, use invokable class-strings instead of Closures:
+    |   'json_formatter' => \App\ErrorFormatters\ApiFormatter::class,
+    |
+    | The class must be invokable (__invoke) or a Closure instance.
+    */
+
+    /*
+    |--------------------------------------------------------------------------
     | Debug Mode Behavior
     |--------------------------------------------------------------------------
     | When APP_DEBUG=true, Spatie Ignition provides an excellent visual

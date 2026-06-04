@@ -37,14 +37,19 @@ final class RateLimitedReporter implements ErrorReporterInterface
         }
 
         $key = $this->buildCacheKey($e);
-        $count = (int) Cache::get($key, 0);
 
-        if ($count >= $rateLimit->max) {
-            // Rate limit exceeded: render the response but skip reporting
-            return true;
+        // Use add() to set TTL only once (fixed window), then increment.
+        // add() returns false if the key already exists — the TTL is untouched.
+        if (Cache::add($key, 0, now()->addMinutes($rateLimit->intervalInMinutes))) {
+            // Key was just created — this is the first report in this window.
         }
 
-        Cache::put($key, $count + 1, now()->addMinutes($rateLimit->intervalInMinutes));
+        $count = (int) Cache::increment($key);
+
+        if ($count > $rateLimit->max) {
+            // Rate limit exceeded: skip reporting
+            return true;
+        }
 
         return $this->inner->report($e);
     }
@@ -52,7 +57,7 @@ final class RateLimitedReporter implements ErrorReporterInterface
     private function buildCacheKey(Throwable $e): string
     {
         return 'laravel-errors:rate-limit:' . md5(
-            $e::class . $e->getFile() . $e->getLine()
+            $this->inner::class . ':' . $e::class . ':' . $e->getFile() . ':' . $e->getLine()
         );
     }
 }

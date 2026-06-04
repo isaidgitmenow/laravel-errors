@@ -177,6 +177,16 @@ final class ErrorManager
     }
 
     /**
+     * Flush all dynamically registered pass-through exceptions.
+     * Called by the service provider on Octane RequestTerminated to prevent
+     * unbounded memory growth in long-running processes.
+     */
+    public static function flushPassThrough(): void
+    {
+        self::$dynamicPassThrough = [];
+    }
+
+    /**
      * Determine if this exception should bypass our pipeline entirely.
      */
     private function isPassThrough(Throwable $e): bool

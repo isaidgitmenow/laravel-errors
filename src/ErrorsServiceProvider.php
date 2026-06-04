@@ -7,6 +7,10 @@ namespace Isaidgitmenow\LaravelErrors;
 use Illuminate\Contracts\Events\Dispatcher;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeDddErrorCommand;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeExceptionCommand;
+use Isaidgitmenow\LaravelErrors\Renderers\ApiRenderer;
+use Isaidgitmenow\LaravelErrors\Renderers\FilamentRenderer;
+use Isaidgitmenow\LaravelErrors\Renderers\InertiaRenderer;
+use Isaidgitmenow\LaravelErrors\Renderers\LivewireRenderer;
 use Isaidgitmenow\LaravelErrors\Reporters\DebugbarReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\LogReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\XdebugReporter;
@@ -52,6 +56,32 @@ class ErrorsServiceProvider extends PackageServiceProvider
                 config: $app['config']->get('errors', []),
             );
         });
+
+        // Bind renderers so they receive the full config (json_formatter,
+        // livewire_handler, filament_handler, inertia_mode, etc.).
+        $this->app->bind(ApiRenderer::class, function ($app) {
+            return new ApiRenderer(
+                config: $app['config']->get('errors', []),
+            );
+        });
+
+        $this->app->bind(FilamentRenderer::class, function ($app) {
+            return new FilamentRenderer(
+                config: $app['config']->get('errors', []),
+            );
+        });
+
+        $this->app->bind(InertiaRenderer::class, function ($app) {
+            return new InertiaRenderer(
+                config: $app['config']->get('errors', []),
+            );
+        });
+
+        $this->app->bind(LivewireRenderer::class, function ($app) {
+            return new LivewireRenderer(
+                config: $app['config']->get('errors', []),
+            );
+        });
     }
 
     public function packageBooted(): void
@@ -65,6 +95,7 @@ class ErrorsServiceProvider extends PackageServiceProvider
                 \Laravel\Octane\Events\RequestTerminated::class,
                 static function (): void {
                     ExceptionInspector::flushCache();
+                    ErrorManager::flushPassThrough();
                 }
             );
         }

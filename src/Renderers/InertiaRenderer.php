@@ -50,7 +50,16 @@ final class InertiaRenderer implements ExceptionRendererInterface
             ],
         ]);
 
-        // Return a proper response to trigger a re-render of the current page
-        return back()->withInput();
+        // Return a proper response to trigger a re-render of the current page.
+        // Wrap in try/catch because back()->withInput() requires an active session,
+        // which may be absent in stateless API routes or certain test environments.
+        try {
+            return back()->withInput();
+        } catch (\Throwable) {
+            return new \Illuminate\Http\RedirectResponse(
+                $request->fullUrl(),
+                302,
+            );
+        }
     }
 }

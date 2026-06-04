@@ -7,6 +7,7 @@ namespace Isaidgitmenow\LaravelErrors\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
+use Isaidgitmenow\LaravelErrors\Console\Concerns\BuildsErrorStubs;
 
 /**
  * Artisan command to generate a decorated exception class.
@@ -18,6 +19,8 @@ use Illuminate\Support\Str;
  */
 class MakeExceptionCommand extends Command
 {
+    use BuildsErrorStubs;
+
     protected $signature = 'make:error
                             {name : The name of the exception class (e.g. PaymentFailed)}
                             {--http=500 : The HTTP status code for #[HttpCode]}
@@ -83,90 +86,5 @@ class MakeExceptionCommand extends Command
         $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $relativePath);
 
         return app_path(ltrim($relativePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $class . '.php');
-    }
-
-    /**
-     * Build the stub contents with all replacements applied.
-     */
-    private function buildStub(string $namespace, string $class): string
-    {
-        $stub = $this->files->get($this->stubPath());
-
-        $useStatements = $this->buildUseStatements();
-        $attributes    = $this->buildAttributes();
-
-        return str_replace(
-            ['{{ namespace }}', '{{ class }}', '{{ use_statements }}', '{{ class_attributes }}'],
-            [$namespace, $class, $useStatements, $attributes],
-            $stub,
-        );
-    }
-
-    /**
-     * Build the `use` import statements based on options.
-     */
-    private function buildUseStatements(): string
-    {
-        $uses = [];
-
-        $http = (int) $this->option('http');
-        if ($http !== 500) {
-            $uses[] = 'use Isaidgitmenow\\LaravelErrors\\Attributes\\HttpCode;';
-        }
-
-        if ($this->option('report')) {
-            $uses[] = 'use Isaidgitmenow\\LaravelErrors\\Attributes\\ReportTo;';
-        }
-
-        return implode("\n", $uses);
-    }
-
-    /**
-     * Build the PHP 8 Attribute annotations for the class.
-     */
-    private function buildAttributes(): string
-    {
-        $lines = [];
-
-        $http = (int) $this->option('http');
-        if ($http !== 500) {
-            $lines[] = "#[HttpCode({$http})]";
-        }
-
-        if ($reportOption = $this->option('report')) {
-            $channels = array_map(
-                fn (string $ch) => "'" . trim($ch) . "'",
-                explode(',', $reportOption),
-            );
-
-            $envOption = $this->option('env');
-            if ($envOption) {
-                $envs = array_map(
-                    fn (string $env) => "'" . trim($env) . "'",
-                    explode(',', $envOption),
-                );
-                $lines[] = count($channels) === 1
-                    ? "#[ReportTo({$channels[0]}, environments: [" . implode(', ', $envs) . "])]"
-                    : "#[ReportTo([" . implode(', ', $channels) . "], environments: [" . implode(', ', $envs) . "])]";
-            } else {
-                $lines[] = count($channels) === 1
-                    ? "#[ReportTo({$channels[0]})]"
-                    : "#[ReportTo([" . implode(', ', $channels) . "])]";
-            }
-        }
-
-        return empty($lines) ? '' : implode("\n", $lines) . "\n";
-    }
-
-    /**
-     * Get the absolute path to the stub file.
-     */
-    private function stubPath(): string
-    {
-        $customStub = base_path('stubs/error.stub');
-
-        return $this->files->exists($customStub)
-            ? $customStub
-            : __DIR__ . '/../../../stubs/error.stub';
     }
 }
