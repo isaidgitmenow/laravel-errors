@@ -2,7 +2,7 @@
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/isaidgitmenow/laravel-errors.svg?style=flat-square)](https://packagist.org/packages/isaidgitmenow/laravel-errors)
 [![Total Downloads](https://img.shields.io/packagist/dt/isaidgitmenow/laravel-errors.svg?style=flat-square)](https://packagist.org/packages/isaidgitmenow/laravel-errors)
-[![Tests](https://img.shields.io/github/actions/workflow/status/isaidgitmenow/errors/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/isaidgitmenow/errors/actions/workflows/run-tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/isaidgitmenow/laravel-errors/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/isaidgitmenow/laravel-errors/actions/workflows/run-tests.yml)
 
 A powerful, elegant, and declarative error handling package for modern Laravel applications (Laravel 11+).
 
