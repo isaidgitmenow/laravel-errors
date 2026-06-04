@@ -16,6 +16,8 @@ You can define an array of sensitive keys (case-insensitive) in the config. The 
 ],
 ```
 
+The sanitizer is resilient: it automatically converts Closures to `[Closure]`, resolves `Stringable` objects, and casts generic objects to their class names to prevent serialization crashes during logging.
+
 ### ⏭️ Pass-Through Exceptions
 Some core Laravel exceptions have specific native rendering logic (e.g., `ValidationException` redirecting back with input). These are defined in the `pass_through` array in the config. The `ErrorManager` ignores these entirely, allowing Laravel to handle them natively.
 
@@ -280,6 +282,8 @@ This package solves this natively using the `#[RateLimit]` attribute, which is p
 ### How it works
 When an exception carrying `#[RateLimit]` is thrown, the `ErrorManager` dynamically wraps all of your reporters (like `LogReporter`, `NightWatchReporter`) in a `RateLimitedReporter`. 
 
+This operates on a **fixed-window cache strategy**, ensuring that rate limits cannot be indefinitely extended under sustained load. Furthermore, **the cache keys are isolated per reporter class**. This means if you allow 5 errors per minute, you will get up to 5 Slack messages *and* up to 5 Daily Logs—they will not exhaust each other's quotas.
+
 If the threshold is exceeded, the reporter simply **skips** sending the error to external trackers, but **still executes the Renderers** (so the user still sees the correct 500 API/Inertia/Livewire response).
 
 ### Example Scenario
@@ -327,14 +331,15 @@ To guarantee zero performance impact in production, the `ExceptionInspector` uti
 
 ### Automatic Octane Compatibility
 
-Under **Laravel Octane** (Swoole or RoadRunner), the application stays bootstrapped in memory across many requests. Without intervention, the static reflection cache would grow indefinitely — a classic memory leak.
+Under **Laravel Octane** (Swoole or RoadRunner), the application stays bootstrapped in memory across many requests. Without intervention, the static reflection cache and dynamic pass-through list would grow indefinitely — a classic memory leak.
 
-This package automatically handles this for you. The `ErrorsServiceProvider` registers a listener on `\Laravel\Octane\Events\RequestTerminated` that flushes the cache at the end of every request:
+This package automatically handles this for you. The `ErrorsServiceProvider` registers a listener on `\Laravel\Octane\Events\RequestTerminated` that flushes the cache and state at the end of every request:
 
 ```php
 // This happens automatically — no configuration required.
 // The event listener is only registered when laravel/octane is installed.
 ExceptionInspector::flushCache();
+ErrorManager::flushPassThrough();
 ```
 
 There is nothing you need to do. If you install `laravel/octane`, the cache flush is wired up for you. If Octane is not installed, zero overhead is added.

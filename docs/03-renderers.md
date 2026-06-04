@@ -248,6 +248,8 @@ The `InertiaDetector` catches requests containing the `X-Inertia` header. The `I
 
 In this mode, the renderer catches the exception, shares the error globally using `Inertia::share()`, and redirects the user back to the same page (`back()->withInput()`). This allows you to show an inline error without losing the user's form data.
 
+*(Note: If the route lacks session middleware—such as in a stateless API context—the renderer will safely return a clean RedirectResponse rather than crashing.)*
+
 ```php
 // config/errors.php
 'inertia_mode' => 'props',

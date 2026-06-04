@@ -195,6 +195,8 @@ If this exception is thrown, you don't need to check your log files. Just open t
 }
 ```
 
+*Note: Just like standard logs, any keys in the `sanitize` configuration array will be automatically redacted (`[REDACTED]`) before appearing in the Debugbar.*
+
 ### 2. Seeing Suppressed Errors Locally
 
 Normally, if you decorate an exception with `#[DontReport]`, it is completely ignored by all reporters (it won't go to your log files, Sentry, Flare, etc.). 

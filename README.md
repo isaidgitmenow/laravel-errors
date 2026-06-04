@@ -19,8 +19,9 @@ Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**
 - **Auto-Injection into Laravel Context**: Automatically forwards `#[WithContext]` data to downstream trackers like Sentry or Flare via Laravel 11's global `Context`.
 - **Data Sanitization**: Built-in redaction for sensitive keys (like passwords and API tokens) before they hit logs or external trackers.
 - **Anti-Spam Rate Limiting**: Prevent cascading failures from exhausting your error tracker quotas using the `#[RateLimit]` attribute.
-- **Octane Compatible**: Automatically flushes the reflection cache after every request under Swoole / RoadRunner to prevent memory leaks.
+- **Octane Compatible**: Automatically flushes the reflection cache and dynamic state after every request under Swoole / RoadRunner to prevent memory leaks.
 - **Dynamic Pass-Through**: Third-party packages can register exceptions to bypass the pipeline at runtime — no config edits required.
+- **Fallback Logging**: Ensures your application never runs completely blind by falling back to Laravel's default logger if you accidentally configure an empty reporter array.
 - **Environment-Specific Reporting**: Restrict `#[ReportTo]` to specific environments (e.g., only send Slack alerts in `production`).
 - **`make:error` Artisan Command**: Scaffold fully decorated exception classes in seconds with `php artisan make:error`.
 - **Static Analysis Ready**: Ships with a `phpstan.neon.dist` pre-configured for [Larastan](https://github.com/larastan/larastan) level 5.
