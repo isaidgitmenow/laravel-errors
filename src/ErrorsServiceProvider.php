@@ -7,6 +7,7 @@ namespace Isaidgitmenow\LaravelErrors;
 use Illuminate\Contracts\Events\Dispatcher;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeDddErrorCommand;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeExceptionCommand;
+use Isaidgitmenow\LaravelErrors\Mcp\Commands\ErrorsMcpCommand;
 use Isaidgitmenow\LaravelErrors\Renderers\ApiRenderer;
 use Isaidgitmenow\LaravelErrors\Renderers\FilamentRenderer;
 use Isaidgitmenow\LaravelErrors\Renderers\InertiaRenderer;
@@ -25,7 +26,8 @@ class ErrorsServiceProvider extends PackageServiceProvider
             ->name('laravel-errors')
             ->hasConfigFile('errors')
             ->hasCommand(MakeExceptionCommand::class)
-            ->hasCommand(MakeDddErrorCommand::class);
+            ->hasCommand(MakeDddErrorCommand::class)
+            ->hasCommand(ErrorsMcpCommand::class);
     }
 
     public function packageRegistered(): void

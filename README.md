@@ -25,6 +25,7 @@ Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**
 - **Environment-Specific Reporting**: Restrict `#[ReportTo]` to specific environments (e.g., only send Slack alerts in `production`).
 - **`make:error` Artisan Command**: Scaffold fully decorated exception classes in seconds with `php artisan make:error`.
 - **Static Analysis Ready**: Ships with a `phpstan.neon.dist` pre-configured for [Larastan](https://github.com/larastan/larastan) level 5.
+- **MCP Server Built-in**: Includes a native Model Context Protocol (MCP) server so your AI agent can create, inspect, and simulate errors straight from your IDE.
 - **CI/CD Ready**: Includes a GitHub Actions workflow matrix covering PHP 8.4/8.5 × Laravel 11/12.
 
 ## 📦 Requirements
@@ -124,6 +125,37 @@ For detailed usage and advanced configuration, please refer to the specific docu
 - 🔬 Static Analysis with Larastan
 - 🤖 Continuous Integration (GitHub Actions)
 
+
+
+---
+## 🤖 AI Agent Integration (MCP Server)
+
+This package ships with a native **Model Context Protocol (MCP)** server, meaning your favorite AI coding assistant (like Claude Desktop, Cursor, or Antigravity) can connect directly to your local error pipeline. 
+
+With the MCP integration enabled, your AI can:
+- **Generate Exceptions:** Ask your AI to "Create a `PaymentFailed` error with a 402 status that reports to Slack", and it will use the MCP tool to generate the fully decorated file.
+- **Inspect Pipeline:** The AI can query your active Detectors, Renderers, and Reporters.
+- **Search Logs:** The AI can query your application's historical JSONL error logs directly to help you debug past errors.
+- **Simulate Errors:** The AI can instantiate and run exceptions through the pipeline in a rolled-back transaction to verify how they behave.
+
+### Setup
+
+To connect your AI agent, add the following configuration to your client's `mcp_config.json` (or `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "laravel-errors-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "cd /path/to/your/project && php artisan errors:mcp"
+      ]
+    }
+  }
+}
+```
+*(If you are on Linux or macOS, simply use `bash` and `-c` instead of `cmd` and `/c`)*
 
 ---
 ## 🧪 Testing

@@ -12,6 +12,7 @@ use Isaidgitmenow\LaravelErrors\Contracts\InteractiveContextDetector;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\BypassesRateLimiting;
 use Isaidgitmenow\LaravelErrors\Contracts\ReportsIgnoredExceptions;
+use Isaidgitmenow\LaravelErrors\Mcp\McpLogger;
 use Isaidgitmenow\LaravelErrors\Reporters\RateLimitedReporter;
 use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,6 +38,12 @@ final class ErrorManager
     private static array $dynamicPassThrough = [];
 
     /**
+     * When true, the MCP command is running and we must suppress all console
+     * exception rendering to prevent ANSI text from leaking into the STDIO stream.
+     */
+    private static bool $bypassConsoleExceptions = false;
+
+    /**
      * Dynamically registered contexts (e.g. from third-party packages).
      * These are prepended before the config-defined contexts.
      *
@@ -60,6 +67,12 @@ final class ErrorManager
      */
     public function report(Throwable $e): void
     {
+        // ANSI bypass: when the MCP server is running, suppress all reporting
+        // to prevent errors from corrupting the JSON-RPC STDIO stream.
+        if (self::$bypassConsoleExceptions) {
+            return;
+        }
+
         try {
             $shouldNotReport = ExceptionInspector::shouldNotReport($e);
 
@@ -99,6 +112,15 @@ final class ErrorManager
         } catch (Throwable) {
             // Self-heal: never let our reporter crash the application
         }
+
+        // AI Structured Logging — local environment only, never throws.
+        if (app()->environment('local')) {
+            try {
+                McpLogger::log($e);
+            } catch (Throwable) {
+                // Logging must never crash the application
+            }
+        }
     }
 
     /**
@@ -108,6 +130,11 @@ final class ErrorManager
      */
     public function render(Throwable $e, Request $request): ?Response
     {
+        // ANSI bypass: prevent colorized console output during MCP server execution.
+        if (self::$bypassConsoleExceptions) {
+            return null;
+        }
+
         try {
             if ($this->isPassThrough($e)) {
                 return null;
@@ -191,6 +218,24 @@ final class ErrorManager
     public static function flushPassThrough(): void
     {
         self::$dynamicPassThrough = [];
+    }
+
+    /**
+     * Tell ErrorManager that the MCP server command is running.
+     * This suppresses ANSI console exception rendering so colorized text
+     * never leaks into the JSON-RPC STDIO stream.
+     */
+    public static function bypassConsoleExceptions(): void
+    {
+        self::$bypassConsoleExceptions = true;
+    }
+
+    /**
+     * Reset the ANSI bypass flag (used in tests).
+     */
+    public static function resetBypass(): void
+    {
+        self::$bypassConsoleExceptions = false;
     }
 
     /**
@@ -299,6 +344,15 @@ final class ErrorManager
      */
     private function getReporters(): array
     {
+        // Mock-reporters lock: when the lock file exists (local env only), silence
+        // all external reporters so the AI can simulate errors without side-effects.
+        if (app()->environment('local')) {
+            $lockPath = storage_path('framework/mcp_mock_reporters.lock');
+            if (file_exists($lockPath)) {
+                return [];
+            }
+        }
+
         return array_merge($this->customReporters, $this->config['reporters'] ?? []);
     }
 
