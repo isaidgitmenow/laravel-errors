@@ -35,9 +35,7 @@ final class ErrorHandler
             // Laravel's default logger so exceptions are never silently swallowed.
             // The .stop() below prevents Laravel's default handler from running,
             // so we must ensure at least one logging path exists.
-            $config = config('errors', []);
-            $reporters = array_merge($config['reporters'] ?? [], []);
-            if (empty($reporters)) {
+            if (!$manager->hasReporters()) {
                 Log::error($e->getMessage(), [
                     'exception' => $e::class,
                     'file'      => $e->getFile(),

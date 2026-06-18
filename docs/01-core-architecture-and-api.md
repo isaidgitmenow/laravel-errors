@@ -22,12 +22,15 @@ The `ErrorManager` is a singleton bound to the service container. It runs the en
   4. Automatically wraps reporters with `RateLimitedReporter` if the `#[RateLimit]` attribute is present.
 - **`render(Throwable $e, Request $request): ?Response`**
   1. Allows `pass_through` exceptions (like `ValidationException`) to fall back to Laravel.
-  2. Intelligently yields to **Ignition** in local debug mode for Web/API requests.
-  3. Iterates through the ordered list of Context Detectors. When a detector matches (e.g., Livewire), it executes the corresponding Renderer.
+  2. Iterates through the ordered list of Context Detectors to find the first match.
+  3. Intelligently yields to **Ignition** in local debug mode — but only for non-interactive contexts. Detectors that implement the `InteractiveContextDetector` marker interface (e.g., `LivewireDetector`, `InertiaDetector`) always keep control so partial renders are not broken.
+  4. Executes the matched Renderer to produce the HTTP response.
 - **`addContext(string $detector, string $renderer): static`**
   Allows third-party packages to dynamically prepend custom Detector/Renderer pairs to the pipeline.
 - **`addReporter(string $reporter): static`**
   Allows third-party packages to dynamically prepend custom Reporters to the pipeline.
+- **`hasReporters(): bool`**
+  Returns `true` if any reporters are configured (via config or dynamically via `addReporter()`). Used internally by `ErrorHandler` to decide if the fallback logger is needed — this ensures dynamically added reporters are correctly accounted for.
 - **`passThrough(string $exceptionClass): void`** *(static)*
   Dynamically registers an exception class to bypass the pipeline entirely. Designed for use by third-party package service providers so their internal exceptions are never captured by your error handler. Unlike the `pass_through` config array, this requires no changes to published config files. See [Dynamic Pass-Through](#-dynamic-pass-through-at-runtime) for details.
 

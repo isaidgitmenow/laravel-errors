@@ -6,6 +6,7 @@ namespace Isaidgitmenow\LaravelErrors\Detectors;
 
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\InteractiveContextDetector;
 use Throwable;
 
 /**
@@ -13,7 +14,7 @@ use Throwable;
  *
  * Livewire sends AJAX requests with the 'X-Livewire' header.
  */
-final class LivewireDetector implements ContextDetectorInterface
+final class LivewireDetector implements ContextDetectorInterface, InteractiveContextDetector
 {
     public function detect(Throwable $e, Request $request): bool
     {

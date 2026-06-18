@@ -9,11 +9,11 @@ The package uses a Strategy Pipeline to automatically identify the request type 
 - **`FilamentRenderer`**: Executes a native Filament `Notification::make()->send()` to trigger a native error Toast Notification inside the Filament UI without breaking the panel. It then returns a standard JSON response to gracefully conclude the Livewire lifecycle.
 
 ### ⚡ Livewire
-- **`LivewireDetector`**: Matches requests carrying the `X-Livewire` header.
+- **`LivewireDetector`**: Matches requests carrying the `X-Livewire` header. Implements `InteractiveContextDetector`, which tells the `ErrorManager` to keep control even in debug mode (instead of yielding to Ignition).
 - **`LivewireRenderer`**: Returns a structured JSON response containing the error message. Livewire parses this natively, preventing full-page HTML crash dumps from destroying Livewire component state.
 
 ### ⚛️ Inertia.js (Vue/React/Svelte)
-- **`InertiaDetector`**: Matches requests carrying the `X-Inertia` header.
+- **`InertiaDetector`**: Matches requests carrying the `X-Inertia` header. Implements `InteractiveContextDetector`, which tells the `ErrorManager` to keep control even in debug mode (instead of yielding to Ignition).
 - **`InertiaRenderer`**: Depending on your `inertia_mode` config, it either shares the error globally as an Inertia `prop` and redirects back, or natively renders a dedicated Error Component via `Inertia::render()`. This allows your SPA to handle the error natively without crashing.
 
 ### 🔌 API Requests

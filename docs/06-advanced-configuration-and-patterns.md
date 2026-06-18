@@ -90,6 +90,29 @@ class MobileAppRenderer implements ExceptionRendererInterface
 }
 ```
 
+#### Marking a Detector as Interactive
+
+If your custom detector represents an **interactive SPA/component context** (like HTMX, Turbo, or a custom WebSocket framework), you should also implement the `InteractiveContextDetector` marker interface. This tells the `ErrorManager` to **never yield to Ignition** in debug mode for this context — because interactive frameworks rely on partial renders, not full-page Ignition error screens.
+
+```php
+namespace App\Exceptions\Handlers;
+
+use Illuminate\Http\Request;
+use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\InteractiveContextDetector;
+use Throwable;
+
+class HtmxDetector implements ContextDetectorInterface, InteractiveContextDetector
+{
+    public function detect(Throwable $e, Request $request): bool
+    {
+        return $request->hasHeader('HX-Request');
+    }
+}
+```
+
+> **Note:** The built-in `LivewireDetector` and `InertiaDetector` already implement `InteractiveContextDetector`. Standard detectors like `ApiDetector` and `WebDetector` do not — they intentionally yield to Ignition in debug mode so developers can see the full Ignition error page.
+
 ### 2. Creating a Custom Reporter
 
 If you want to send errors to a proprietary internal tracking system, implement the `ErrorReporterInterface`:

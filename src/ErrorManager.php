@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
 use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\InteractiveContextDetector;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\Contracts\BypassesRateLimiting;
 use Isaidgitmenow\LaravelErrors\Contracts\ReportsIgnoredExceptions;
@@ -108,35 +109,36 @@ final class ErrorManager
     public function render(Throwable $e, Request $request): ?Response
     {
         try {
-            // Check if this exception should pass through to Laravel's default handler
             if ($this->isPassThrough($e)) {
                 return null;
             }
 
-            // In debug mode, yield control back to Ignition for Web/API contexts
-            if ($this->shouldYieldToIgnition($e, $request)) {
+            // Find matching detector
+            $matchedDetector = null;
+            $rendererClass = null;
+
+            foreach ($this->getContexts() as $detectorClass => $rndClass) {
+                $detector = app($detectorClass);
+                if ($detector instanceof ContextDetectorInterface && $detector->detect($e, $request)) {
+                    $matchedDetector = $detector;
+                    $rendererClass = $rndClass;
+                    break;
+                }
+            }
+
+            // If debug mode is enabled, yield to Ignition for non-interactive contexts
+            if ($this->shouldYieldToIgnition($matchedDetector, $request)) {
                 return null;
             }
 
-            foreach ($this->getContexts() as $detectorClass => $rendererClass) {
-                $detector = app($detectorClass);
-
-                if (!$detector instanceof ContextDetectorInterface) {
-                    continue;
-                }
-
-                if (!$detector->detect($e, $request)) {
-                    continue;
-                }
-
+            // If we have a renderer, execute it
+            if ($rendererClass) {
                 $renderer = app($rendererClass);
-
-                if (!$renderer instanceof ExceptionRendererInterface) {
-                    continue;
+                if ($renderer instanceof ExceptionRendererInterface) {
+                    return $renderer->render($e, $request);
                 }
-
-                return $renderer->render($e, $request);
             }
+
         } catch (Throwable) {
             // Self-heal: never let our renderer cause a WSOD
         }
@@ -211,8 +213,11 @@ final class ErrorManager
 
     /**
      * Determine if Ignition should take over (debug mode + non-interactive context).
+     *
+     * Interactive contexts (detectors implementing InteractiveContextDetector) always
+     * keep control so partial renders (Livewire, Inertia, etc.) are not broken.
      */
-    private function shouldYieldToIgnition(Throwable $e, Request $request): bool
+    private function shouldYieldToIgnition(?ContextDetectorInterface $detector, Request $request): bool
     {
         if (!($this->config['respect_debug_mode'] ?? true)) {
             return false;
@@ -222,29 +227,9 @@ final class ErrorManager
             return false;
         }
 
-        // In debug mode, yield only for standard Web and API contexts,
-        // NOT for Filament/Livewire/Inertia where partial renders matter.
         return !$request->ajax()
             && !$request->wantsJson()
-            && !$this->isInteractiveContext($request);
-    }
-
-    /**
-     * Determine if the request is from an interactive SPA/component context.
-     */
-    private function isInteractiveContext(Request $request): bool
-    {
-        // Livewire
-        if ($request->hasHeader('X-Livewire')) {
-            return true;
-        }
-
-        // Inertia
-        if ($request->hasHeader('X-Inertia')) {
-            return true;
-        }
-
-        return false;
+            && !$detector instanceof InteractiveContextDetector;
     }
 
     /**
@@ -315,5 +300,15 @@ final class ErrorManager
     private function getReporters(): array
     {
         return array_merge($this->customReporters, $this->config['reporters'] ?? []);
+    }
+
+    /**
+     * Check whether any reporters are configured (config or dynamic).
+     *
+     * Used by ErrorHandler to decide if a fallback logger is needed.
+     */
+    public function hasReporters(): bool
+    {
+        return !empty($this->getReporters());
     }
 }

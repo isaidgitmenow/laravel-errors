@@ -6,6 +6,7 @@ namespace Isaidgitmenow\LaravelErrors\Detectors;
 
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
+use Isaidgitmenow\LaravelErrors\Contracts\InteractiveContextDetector;
 use Throwable;
 
 /**
@@ -13,7 +14,7 @@ use Throwable;
  *
  * Inertia sends all navigation requests with the 'X-Inertia' header.
  */
-final class InertiaDetector implements ContextDetectorInterface
+final class InertiaDetector implements ContextDetectorInterface, InteractiveContextDetector
 {
     public function detect(Throwable $e, Request $request): bool
     {
