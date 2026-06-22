@@ -4,6 +4,10 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/isaidgitmenow/laravel-errors.svg?style=flat-square)](https://packagist.org/packages/isaidgitmenow/laravel-errors)
 [![Tests](https://img.shields.io/github/actions/workflow/status/isaidgitmenow/laravel-errors/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/isaidgitmenow/laravel-errors/actions/workflows/run-tests.yml)
 
+```bash
+composer require isaidgitmenow/laravel-errors
+```
+
 A powerful, elegant, and declarative error handling package for modern Laravel applications (Laravel 11+).
 
 Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**, this package replaces traditional, boilerplate-heavy exception rendering and reporting methods with clean, declarative attributes directly on your Exception classes.
@@ -176,6 +180,13 @@ composer phpstan
 ---
 ## 📜 License
 
-The MIT License (MIT). Please see [License File](LICENSE) for more information.
+This package is **Dual Licensed**:
+- **Open Source (GPLv3):** Free for personal or open-source projects. If you use this package, your application must also be open-source under the GPLv3.
+- **Commercial Use:** If you are building a commercial, proprietary, or closed-source application, you **must** purchase a Commercial License.
+
+### Purchase a License
+To purchase a Commercial License, please visit **[unicweb.ro](https://unicweb.ro)** or contact **lucian.laravel@gmail.com** for inquiries.
+
+Please read the full [LICENSE Agreement](LICENSE) for complete details.
 
 ---
