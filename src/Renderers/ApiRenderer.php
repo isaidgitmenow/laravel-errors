@@ -32,13 +32,13 @@ final class ApiRenderer implements ExceptionRendererInterface
         if ($formatter instanceof \Closure) {
             $payload = $formatter($e, $request);
         } else {
-            $payload = $this->defaultPayload($e, $message);
+            $payload = $this->defaultPayload($message);
         }
 
         return response()->json($payload, $statusCode);
     }
 
-    private function defaultPayload(Throwable $e, string $message): array
+    private function defaultPayload(string $message): array
     {
         return [
             'message' => $message,

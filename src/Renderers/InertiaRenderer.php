@@ -54,12 +54,13 @@ final class InertiaRenderer implements ExceptionRendererInterface
         // Wrap in try/catch because back()->withInput() requires an active session,
         // which may be absent in stateless API routes or certain test environments.
         try {
-            return back()->withInput();
+            return back()->withInput()->setStatusCode($statusCode);
         } catch (\Throwable) {
             return new \Illuminate\Http\RedirectResponse(
                 $request->fullUrl(),
-                302,
+                $statusCode >= 400 ? $statusCode : 302,
             );
         }
     }
+
 }

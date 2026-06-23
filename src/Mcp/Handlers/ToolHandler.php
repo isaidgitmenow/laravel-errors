@@ -167,7 +167,6 @@ final class ToolHandler
             $parameters['--domain'] = $domain;
         }
 
-        set_time_limit(30);
         $exitCode = Artisan::call($command, $parameters);
         $output   = Artisan::output();
 
@@ -187,51 +186,70 @@ final class ToolHandler
         $page    = max(1, (int) ($args['page'] ?? 1));
         $perPage = min(100, max(1, (int) ($args['per_page'] ?? 20)));
 
-        $exceptionsPath = app_path('Exceptions');
-        $results        = [];
+        $results = [];
 
-        if (! is_dir($exceptionsPath)) {
-            return ['page' => $page, 'per_page' => $perPage, 'total' => 0, 'items' => []];
+        $paths = [
+            app_path('Exceptions') => app()->getNamespace() . 'Exceptions\\',
+        ];
+
+        // Also scan the lunarstorm/laravel-ddd domain paths if they exist
+        $domainPath = rtrim((string) config('ddd.domain_path', 'src/Domain'), '/\\');
+        $domainFullPath = base_path($domainPath);
+        if (is_dir($domainFullPath)) {
+            $domainNamespace = rtrim((string) config('ddd.domain_namespace', 'Domain'), '\\') . '\\';
+            $paths[$domainFullPath] = $domainNamespace;
         }
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($exceptionsPath, \FilesystemIterator::SKIP_DOTS)
-        );
-
-        /** @var \SplFileInfo $file */
-        foreach ($iterator as $file) {
-            if ($file->getExtension() !== 'php') {
+        foreach ($paths as $basePath => $baseNamespace) {
+            if (! is_dir($basePath)) {
                 continue;
             }
 
-            $realPath = $file->getRealPath();
-            if ($realPath === false) {
-                continue;
-            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($basePath, \FilesystemIterator::SKIP_DOTS)
+            );
 
-            $relative  = str_replace($exceptionsPath . DIRECTORY_SEPARATOR, '', $realPath);
-            $classPath = str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relative);
-            $fqcn      = app()->getNamespace() . 'Exceptions\\' . $classPath;
-
-            if (! class_exists($fqcn)) {
-                continue;
-            }
-
-            try {
-                $ref    = new ReflectionClass($fqcn);
-                $attrs  = [];
-                foreach ($ref->getAttributes() as $attr) {
-                    $attrs[] = class_basename($attr->getName());
+            /** @var \SplFileInfo $file */
+            foreach ($iterator as $file) {
+                if ($file->getExtension() !== 'php') {
+                    continue;
                 }
 
-                $results[] = [
-                    'class'      => $fqcn,
-                    'file'       => str_replace(base_path() . DIRECTORY_SEPARATOR, '', $file->getRealPath()),
-                    'attributes' => $attrs,
-                    'throwable'  => $ref->implementsInterface(Throwable::class) || $ref->isSubclassOf(\Exception::class),
-                ];
-            } catch (Throwable) {
-                // Skip unloadable classes
+                $realPath = $file->getRealPath();
+                if ($realPath === false) {
+                    continue;
+                }
+
+                $relative  = str_replace($basePath . DIRECTORY_SEPARATOR, '', $realPath);
+
+                // For DDD paths, we only care about files in an 'Exceptions' directory
+                if ($basePath === $domainFullPath && !str_contains($relative, DIRECTORY_SEPARATOR . 'Exceptions' . DIRECTORY_SEPARATOR)) {
+                    continue;
+                }
+
+                $classPath = str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relative);
+                $fqcn      = $baseNamespace . $classPath;
+
+                if (! class_exists($fqcn)) {
+                    continue;
+                }
+
+                try {
+                    $ref    = new ReflectionClass($fqcn);
+                    $attrs  = [];
+                    foreach ($ref->getAttributes() as $attr) {
+                        $attrs[] = class_basename($attr->getName());
+                    }
+
+                    $results[] = [
+                        'class'      => $fqcn,
+                        'file'       => str_replace(base_path() . DIRECTORY_SEPARATOR, '', $file->getRealPath()),
+                        'attributes' => $attrs,
+                        'throwable'  => $ref->implementsInterface(Throwable::class) || $ref->isSubclassOf(\Exception::class),
+                    ];
+                } catch (Throwable) {
+                    // Skip unloadable classes
+                }
             }
         }
 
@@ -293,8 +311,6 @@ final class ToolHandler
         if (! class_exists($class) || ! is_subclass_of($class, Throwable::class)) {
             throw new \InvalidArgumentException("simulate_error: [{$class}] is not a valid Throwable subclass.");
         }
-
-        set_time_limit(30);
 
         // Mock the Request object from context
         $url     = (string) ($context['url'] ?? 'http://localhost/simulate');

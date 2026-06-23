@@ -45,7 +45,7 @@ trait BuildsErrorStubs
             $uses[] = 'use Isaidgitmenow\\LaravelErrors\\Attributes\\ReportTo;';
         }
 
-        return implode("\n", $uses);
+        return empty($uses) ? '' : "\n" . implode("\n", $uses);
     }
 
     /**
@@ -82,7 +82,7 @@ trait BuildsErrorStubs
             }
         }
 
-        return empty($lines) ? '' : implode("\n", $lines) . "\n";
+        return empty($lines) ? '' : "\n" . implode("\n", $lines) . "\n";
     }
 
     /**

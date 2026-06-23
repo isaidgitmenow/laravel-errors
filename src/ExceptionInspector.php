@@ -31,22 +31,44 @@ final class ExceptionInspector
     private static array $cache = [];
 
     /**
+     * Per-request origin cache: spl_object_id => resolved origin Throwable.
+     * Prevents O(chain_length × inspections) reflection traversals per request.
+     *
+     * @var array<int, Throwable>
+     */
+    private static array $originCache = [];
+
+    /**
      * Resolve the "origin" exception - the deepest non-framework exception in the chain
      * that carries our custom attributes, or the root if none found.
      */
     public static function origin(Throwable $e): Throwable
     {
-        $candidate = $e;
-        $current = $e;
+        $oid = spl_object_id($e);
+
+        if (isset(static::$originCache[$oid])) {
+            return static::$originCache[$oid];
+        }
+
+        // Walk the chain looking for the deepest exception that carries our
+        // custom attributes. Track the deepest node as the fallback so that
+        // when NO exception in the chain has attributes we return the true
+        // root cause (deepest getPrevious()), not the outermost wrapper.
+        $attributed = null; // deepest node that has at least one of our attrs
+        $deepest    = $e;   // deepest node in the chain (root cause fallback)
+        $current    = $e;
 
         while ($current !== null) {
+            $deepest = $current;
             if (static::hasAnyAttribute($current)) {
-                $candidate = $current;
+                $attributed = $current;
             }
             $current = $current->getPrevious();
         }
 
-        return $candidate;
+        $result = $attributed ?? $deepest;
+
+        return static::$originCache[$oid] = $result;
     }
 
     /**
@@ -267,6 +289,7 @@ final class ExceptionInspector
      */
     public static function flushCache(): void
     {
-        static::$cache = [];
+        static::$cache      = [];
+        static::$originCache = [];
     }
 }

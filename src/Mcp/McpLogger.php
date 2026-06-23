@@ -160,6 +160,7 @@ final class McpLogger
     {
         set_error_handler(static fn () => true);
         try {
+            clearstatcache(true, $path);
             if (file_exists($path) && filesize($path) >= self::MAX_BYTES) {
                 $oldPath = dirname($path) . DIRECTORY_SEPARATOR . self::LOG_FILE_OLD;
                 rename($path, $oldPath);

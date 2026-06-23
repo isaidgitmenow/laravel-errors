@@ -22,6 +22,10 @@ use Throwable;
  */
 final class WebRenderer implements ExceptionRendererInterface
 {
+    public function __construct(
+        private readonly array $config = [],
+    ) {}
+
     public function render(Throwable $e, Request $request): ?Response
     {
         // Fall through to Laravel's default error page rendering.

@@ -45,7 +45,7 @@ describe('ddd:error – missing laravel-ddd package', function () {
         // a dev dependency of this package — no fake needed here.
         $this->artisan('ddd:error', ['name' => 'Invoicing:PaymentFailed'])
             ->assertFailed()
-            ->expectsOutputToContain('tey/laravel-ddd');
+            ->expectsOutputToContain('lunarstorm/laravel-ddd');
     });
 
 });

@@ -33,7 +33,11 @@ final class FilamentRenderer implements ExceptionRendererInterface
         $handler = $this->config['filament_handler'] ?? null;
 
         if ($handler instanceof \Closure) {
-            $handler($e, $request);
+            $result = $handler($e, $request);
+            // If the Closure returns a Response, honour it directly.
+            if ($result instanceof Response) {
+                return $result;
+            }
         } elseif ($this->isFilamentNotificationAvailable()) {
             // Use native Filament Notification - dynamic to avoid hard dependency
             \Filament\Notifications\Notification::make()
@@ -48,6 +52,7 @@ final class FilamentRenderer implements ExceptionRendererInterface
             'message' => $message,
         ], $statusCode);
     }
+
 
     private function isFilamentNotificationAvailable(): bool
     {

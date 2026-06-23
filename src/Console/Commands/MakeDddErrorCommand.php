@@ -67,8 +67,8 @@ class MakeDddErrorCommand extends Command
     {
         if (! $this->isLaravelDddAvailable()) {
             $this->components->error(
-                'The [tey/laravel-ddd] package is required to use [ddd:error]. ' .
-                'Install it with: composer require tey/laravel-ddd'
+                'The [lunarstorm/laravel-ddd] package is required to use [ddd:error]. ' .
+                'Install it with: composer require lunarstorm/laravel-ddd'
             );
 
             return self::FAILURE;

@@ -37,17 +37,22 @@ final class RateLimitedReporter implements ErrorReporterInterface
         }
 
         $key = $this->buildCacheKey($e);
+        $ttl = now()->addMinutes($rateLimit->intervalInMinutes);
 
-        // Use add() to set TTL only once (fixed window), then increment.
-        // add() returns false if the key already exists — the TTL is untouched.
-        if (Cache::add($key, 0, now()->addMinutes($rateLimit->intervalInMinutes))) {
-            // Key was just created — this is the first report in this window.
+        // Atomic strategy: try to add the key with value 1 (the first report).
+        // - add() succeeds   → first occurrence in this window → count = 1, always report.
+        // - add() fails      → key already exists → increment and compare to max.
+        // This avoids the add(0) + increment() two-step that could double-count on
+        // non-atomic cache drivers (file, database) and is correct on Redis too.
+        if (Cache::add($key, 1, $ttl)) {
+            // First report in this window — always delegate.
+            return $this->inner->report($e);
         }
 
         $count = (int) Cache::increment($key);
 
         if ($count > $rateLimit->max) {
-            // Rate limit exceeded: skip reporting
+            // Rate limit exceeded: suppress without stopping the pipeline.
             return true;
         }
 

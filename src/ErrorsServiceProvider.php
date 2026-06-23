@@ -84,6 +84,12 @@ class ErrorsServiceProvider extends PackageServiceProvider
                 config: $app['config']->get('errors', []),
             );
         });
+
+        $this->app->bind(\Isaidgitmenow\LaravelErrors\Renderers\WebRenderer::class, function ($app) {
+            return new \Isaidgitmenow\LaravelErrors\Renderers\WebRenderer(
+                config: $app['config']->get('errors', []),
+            );
+        });
     }
 
     public function packageBooted(): void
@@ -98,6 +104,7 @@ class ErrorsServiceProvider extends PackageServiceProvider
                 static function (): void {
                     ExceptionInspector::flushCache();
                     ErrorManager::flushPassThrough();
+                    ErrorManager::resetBypass();
                 }
             );
         }

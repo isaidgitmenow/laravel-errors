@@ -115,8 +115,9 @@ final class McpServer
      */
     private function handleLine(string $line): void
     {
-        // 1. Validate JSON before decode (php 8.3+).
-        if (function_exists('json_validate') && ! json_validate($line)) {
+        // Validate JSON before decode — json_validate() is always available on php 8.3+.
+        // The package requires php ^8.4, so this check is unconditional.
+        if (! json_validate($line)) {
             $this->emitError(null, self::ERR_PARSE_ERROR, 'Parse error: invalid JSON');
             return;
         }
@@ -227,6 +228,9 @@ final class McpServer
         try {
             set_time_limit(30);
             $result  = $this->toolHandler->call($name, $arguments);
+            // Reset to unlimited so STDIN blocking reads are never cut short
+            // between tool calls in this long-running daemon process.
+            set_time_limit(0);
             $encoded = json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
             if ($encoded === false) {
@@ -241,6 +245,7 @@ final class McpServer
                 'isError' => false,
             ]);
         } catch (\InvalidArgumentException $e) {
+            set_time_limit(0);
             $this->emitError($id, self::ERR_INVALID_PARAMS, $e->getMessage());
         }
     }
