@@ -22,8 +22,9 @@ use Throwable;
  */
 final class WebRenderer implements ExceptionRendererInterface
 {
+    /** @phpstan-ignore constructor.unusedParameter */
     public function __construct(
-        private readonly array $config = [],
+        array $config = [],
     ) {}
 
     public function render(Throwable $e, Request $request): ?Response
