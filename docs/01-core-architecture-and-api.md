@@ -32,7 +32,7 @@ The `ErrorManager` is a singleton bound to the service container. It runs the en
 - **`hasReporters(): bool`**
   Returns `true` if any reporters are configured (via config or dynamically via `addReporter()`). Used internally by `ErrorHandler` to decide if the fallback logger is needed — this ensures dynamically added reporters are correctly accounted for.
 - **`passThrough(string $exceptionClass): void`** *(static)*
-  Dynamically registers an exception class to bypass the pipeline entirely. Designed for use by third-party package service providers so their internal exceptions are never captured by your error handler. Unlike the `pass_through` config array, this requires no changes to published config files. See [Dynamic Pass-Through](#-dynamic-pass-through-at-runtime) for details.
+  Dynamically registers an exception class to bypass the pipeline entirely. Designed for use by third-party package service providers so their internal exceptions are never captured by your error handler. Unlike the `pass_through` config array, this requires no changes to published config files. See [Dynamic Pass-Through](05-exception-handling-mechanics.md#dynamic-pass-through-at-runtime) for details.
 
 ### 3. The Inspector: `ExceptionInspector`
 

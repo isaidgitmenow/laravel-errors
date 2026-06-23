@@ -45,7 +45,7 @@ class DatabaseReplicationLagException extends \Exception {}
 
 When `environments` is non-empty, the `ExceptionInspector` checks `app()->environment($environments)` before returning the channels. If the current environment is not in the list, `reportToChannels()` returns `null` and the `LogReporter` skips sending the report entirely — no noise in local or staging, full alerts in production.
 
-See [Environment-Specific Reporting](#-environment-specific-reporting) for a full walkthrough.
+See [Environment-Specific Reporting](04-reporters-and-integrations.md#environment-specific-reporting) for a full walkthrough.
 
 ### `#[TranslatedMessage(string $key)]`
 Provides a user-friendly, translated error message key. Filament, Inertia, and API renderers will prioritize this message to present a safe error to the frontend.
