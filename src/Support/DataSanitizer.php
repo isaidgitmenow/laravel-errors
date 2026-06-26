@@ -28,10 +28,10 @@ final class DataSanitizer
                 $result[$key] = static::sanitize($value, $sensitiveKeys);
             } elseif ($value instanceof \Closure) {
                 $result[$key] = '[Closure]';
-            } elseif (is_resource($value)) {
-                // PHP resource handles (file, socket, db cursor, etc.) cannot be
-                // serialized. Convert to a safe string to prevent TypeError.
-                $result[$key] = '[resource:' . get_resource_type($value) . ']';
+            } elseif (is_resource($value) || str_starts_with(gettype($value), 'resource')) {
+                // is_resource() returns false for closed resources in PHP 8+,
+                // but gettype() returns 'resource (closed)'. This branch catches both.
+                $result[$key] = '[resource]';
             } elseif (is_object($value)) {
                 // Convert objects to a safe string representation.
                 // Stringable objects get their string value; others get their class name.

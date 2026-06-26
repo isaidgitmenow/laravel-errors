@@ -52,4 +52,29 @@ describe('Attributes', function () {
         expect($attr->intervalInMinutes)->toBe(5);
     });
 
+    it('HttpCode attribute rejects success status codes (below 400)', function () {
+        expect(fn () => new HttpCode(200))
+            ->toThrow(\InvalidArgumentException::class, 'between 400 and 599');
+    });
+
+    it('HttpCode attribute rejects redirect status codes', function () {
+        expect(fn () => new HttpCode(301))
+            ->toThrow(\InvalidArgumentException::class, 'between 400 and 599');
+    });
+
+    it('HttpCode attribute accepts client error codes', function () {
+        $attr = new HttpCode(404);
+        expect($attr->code)->toBe(404);
+    });
+
+    it('HttpCode attribute accepts server error codes', function () {
+        $attr = new HttpCode(503);
+        expect($attr->code)->toBe(503);
+    });
+
+    it('HttpCode attribute rejects codes above 599', function () {
+        expect(fn () => new HttpCode(600))
+            ->toThrow(\InvalidArgumentException::class, 'between 400 and 599');
+    });
+
 });

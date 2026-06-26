@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Isaidgitmenow\LaravelErrors;
 
 use Illuminate\Foundation\Configuration\Exceptions;
-use Illuminate\Support\Facades\Log;
 
 /**
  * The public-facing facade for bootstrapping the package.
@@ -30,22 +29,11 @@ final class ErrorHandler
             $manager = app(ErrorManager::class);
             $manager->report($e);
 
-            // Safety net: if no reporters are configured at all, fall back to
-            // Laravel's default logger so exceptions are never silently swallowed.
-            // NOTE: we do NOT call .stop() so that when all reporters have
-            // shouldReport()→false, Laravel's native logger still runs as a
-            // guaranteed fallback (e.g., XdebugReporter alone in production).
-            if (!$manager->hasReporters()) {
-                Log::error($e->getMessage(), [
-                    'exception' => $e::class,
-                    'file'      => $e->getFile(),
-                    'line'      => $e->getLine(),
-                ]);
-            }
+            // .stop() is deliberately NOT called so that Laravel's default exception
+            // logger always runs as a guaranteed fallback safety net. This means any
+            // exception that all reporters skip (shouldReport()→false) is still logged
+            // by Laravel's native handler, and no exception is ever silently swallowed.
         });
-        // .stop() deliberately removed — our LogReporter handles the primary logging,
-        // but Laravel's default handler acts as a guaranteed safety net for exceptions
-        // that no reporter handles (e.g., shouldReport()→false for all reporters).
 
         $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
             /** @var ErrorManager $manager */

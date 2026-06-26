@@ -122,4 +122,13 @@ describe('DataSanitizer', function () {
         expect($sanitized['obj'])->toBe('[stdClass]');
     });
 
+    it('converts resources to a safe string representation', function () {
+        $handle = fopen('php://memory', 'r');
+        $data = ['stream' => $handle];
+        $sanitized = DataSanitizer::sanitize($data, []);
+
+        expect($sanitized['stream'])->toBe('[resource]');
+        fclose($handle);
+    });
+
 });

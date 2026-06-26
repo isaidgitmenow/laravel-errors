@@ -355,14 +355,4 @@ final class ErrorManager
 
         return array_merge($this->customReporters, $this->config['reporters'] ?? []);
     }
-
-    /**
-     * Check whether any reporters are configured (config or dynamic).
-     *
-     * Used by ErrorHandler to decide if a fallback logger is needed.
-     */
-    public function hasReporters(): bool
-    {
-        return !empty($this->getReporters());
-    }
 }

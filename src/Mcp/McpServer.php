@@ -228,9 +228,6 @@ final class McpServer
         try {
             set_time_limit(30);
             $result  = $this->toolHandler->call($name, $arguments);
-            // Reset to unlimited so STDIN blocking reads are never cut short
-            // between tool calls in this long-running daemon process.
-            set_time_limit(0);
             $encoded = json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
             if ($encoded === false) {
@@ -245,8 +242,11 @@ final class McpServer
                 'isError' => false,
             ]);
         } catch (\InvalidArgumentException $e) {
-            set_time_limit(0);
             $this->emitError($id, self::ERR_INVALID_PARAMS, $e->getMessage());
+        } finally {
+            // Always reset to unlimited so STDIN blocking reads are never cut short
+            // between tool calls in this long-running daemon process.
+            set_time_limit(0);
         }
     }
 

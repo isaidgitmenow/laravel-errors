@@ -50,15 +50,19 @@ final class InertiaRenderer implements ExceptionRendererInterface
             ],
         ]);
 
-        // Return a proper response to trigger a re-render of the current page.
+        // Return a redirect to trigger a re-render of the current page with the
+        // error shared as Inertia props. Redirects MUST use 3xx status codes per
+        // HTTP spec — the actual error status is already in the shared props above.
+        // Using a non-3xx code on a RedirectResponse produces undefined behavior
+        // in HTTP clients (blank pages, ignored Location headers).
         // Wrap in try/catch because back()->withInput() requires an active session,
         // which may be absent in stateless API routes or certain test environments.
         try {
-            return back()->withInput()->setStatusCode($statusCode);
+            return back()->withInput();
         } catch (\Throwable) {
             return new \Illuminate\Http\RedirectResponse(
                 $request->fullUrl(),
-                $statusCode >= 400 ? $statusCode : 302,
+                302,
             );
         }
     }

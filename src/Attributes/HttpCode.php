@@ -19,8 +19,8 @@ final readonly class HttpCode
     public function __construct(
         public int $code,
     ) {
-        if ($code < 100 || $code > 599) {
-            throw new \InvalidArgumentException("HTTP status code must be between 100 and 599, got {$code}.");
+        if ($code < 400 || $code > 599) {
+            throw new \InvalidArgumentException("HTTP status code must be between 400 and 599 (client/server error), got {$code}.");
         }
     }
 }
