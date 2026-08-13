@@ -72,7 +72,7 @@ final class McpServer
             ob_start();
             $line   = stream_get_line($this->inputStream, self::READ_BUFFER, "\n");
             $leaked = ob_get_clean();
-            if ($leaked !== '' && $leaked !== false) {
+            if (is_string($leaked) && $leaked !== '') {
                 fwrite(STDERR, "[mcp:leaked-output] " . $leaked . "\n");
             }
 
@@ -93,7 +93,7 @@ final class McpServer
             ob_start();
             $this->handleLine($trimmed);
             $leaked = ob_get_clean();
-            if ($leaked !== '' && $leaked !== false) {
+            if (is_string($leaked) && $leaked !== '') {
                 fwrite(STDERR, "[mcp:leaked-output] " . $leaked . "\n");
             }
 
