@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use Isaidgitmenow\LaravelErrors\Console\Concerns\BuildsErrorStubs;
+use Isaidgitmenow\LaravelErrors\Console\Concerns\ValidatesErrorInput;
 
 /**
  * Artisan command to generate a decorated exception class inside a DDD domain module.
@@ -22,6 +23,7 @@ use Isaidgitmenow\LaravelErrors\Console\Concerns\BuildsErrorStubs;
 class MakeDddErrorCommand extends Command
 {
     use BuildsErrorStubs;
+    use ValidatesErrorInput;
 
     /**
      * When non-null, overrides the runtime availability check.
@@ -76,6 +78,20 @@ class MakeDddErrorCommand extends Command
 
         [$domain, $class] = $this->parseDomainAndClass();
 
+        try {
+            $class = $this->validatedSegment($class, 'exception class name');
+            if ($domain) {
+                $domain = $this->validatedSegment($domain, 'domain');
+            }
+            $this->validatedHttp($this->option('http'));
+            if ($this->option('report')) {
+                $this->validatedList($this->option('report'), 'report channel');
+            }
+        } catch (\InvalidArgumentException $ex) {
+            $this->components->error($ex->getMessage());
+            return self::FAILURE;
+        }
+
         if (! $domain) {
             $this->components->error(
                 'A domain name is required. Use [--domain=MyDomain] or the shorthand [Domain:ClassName].'
@@ -90,6 +106,13 @@ class MakeDddErrorCommand extends Command
         if ($this->files->exists($targetPath)) {
             $this->components->error("Exception [{$class}] already exists in domain [{$domain}].");
 
+            return self::FAILURE;
+        }
+
+        try {
+            $this->assertWithinBase($targetPath, base_path());
+        } catch (\InvalidArgumentException $ex) {
+            $this->components->error($ex->getMessage());
             return self::FAILURE;
         }
 

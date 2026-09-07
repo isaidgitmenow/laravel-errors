@@ -24,7 +24,7 @@ describe('ApiRenderer', function () {
         expect($response->getStatusCode())->toBe(500);
         $body = json_decode($response->getContent(), true);
         expect($body)->toHaveKey('message');
-        expect($body['message'])->toBe('Something failed');
+        expect($body['message'])->toContain('Internal Server Error (ref: ');
     });
 
     it('uses HttpCode attribute for the response status', function () {

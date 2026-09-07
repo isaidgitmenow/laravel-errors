@@ -7,19 +7,15 @@ namespace Isaidgitmenow\LaravelErrors\Attributes;
 use Attribute;
 
 /**
- * Provide a translation key to be sent to the frontend (Livewire, Inertia, Filament)
- * instead of the raw PHP exception message.
- *
- * The package will automatically resolve the translation via Laravel's `trans()` helper.
+ * Provide a translation key to be sent to the frontend instead of the raw PHP exception message.
  *
  * Usage:
  * #[TranslatedMessage('errors.payment_failed')]
- * class PaymentFailedException extends \Exception {}
+ * #[TranslatedMessage('errors.insufficient_funds', params: ['amount'], choice: 'count')]
  */
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class TranslatedMessage
 {
-    public function __construct(
-        public string $key,
-    ) {}
+    /** @param array<int|string, string> $params  ['amount'] sau ['suma' => 'amount']; valori = proprietăți/metode publice */
+    public function __construct(public string $key, public array $params = [], public ?string $choice = null) {}
 }

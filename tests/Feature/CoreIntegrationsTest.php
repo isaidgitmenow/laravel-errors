@@ -22,8 +22,14 @@ namespace Tests\Feature {
             $reportClosure = null;
             $renderClosure = null;
             
-            $exceptionsMock = \Mockery::mock(Exceptions::class)->makePartial();
-            
+            $exceptionsMock = \Mockery::mock(Exceptions::class);
+            $exceptionsMock->shouldReceive('map')->andReturnSelf();
+            $exceptionsMock->shouldReceive('dontReport')->andReturnSelf();
+            $exceptionsMock->shouldReceive('level')->andReturnSelf();
+            $exceptionsMock->shouldReceive('context')->andReturnSelf();
+            $exceptionsMock->shouldReceive('throttle')->andReturnSelf();
+            $exceptionsMock->shouldReceive('respond')->andReturnSelf();
+            $exceptionsMock->shouldReceive('shouldRenderJsonWhen')->andReturnSelf();
             $exceptionsMock->shouldReceive('report')->andReturnUsing(function ($callable) use (&$reportClosure, $exceptionsMock) {
                 $reportClosure = $callable;
                 // Return an object with a stop() method to simulate Laravel's chain

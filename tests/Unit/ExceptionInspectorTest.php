@@ -56,9 +56,9 @@ describe('ExceptionInspector', function () {
         expect(ExceptionInspector::httpCode(new RuntimeException()))->toBe(500);
     });
 
-    it('uses getCode() when it is a valid HTTP status', function () {
+    it('does NOT use getCode() for standard exceptions even if it looks like an HTTP status', function () {
         $e = new RuntimeException('msg', 404);
-        expect(ExceptionInspector::httpCode($e))->toBe(404);
+        expect(ExceptionInspector::httpCode($e))->toBe(500);
     });
 
     it('detects DontReport attribute', function () {
@@ -86,7 +86,7 @@ describe('ExceptionInspector', function () {
             ->getMethod('attributes');
         $attrs->setAccessible(true);
         $data = $attrs->invoke(null, $e);
-        expect($data['translated_message'])->toBe('errors.custom');
+        expect($data['translated_message']['key'])->toBe('errors.custom');
     });
 
     it('extracts context properties from the exception class', function () {

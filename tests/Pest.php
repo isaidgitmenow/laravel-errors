@@ -57,7 +57,13 @@ namespace Filament\Facades {
                 if (self::$panel === 'throw') {
                     throw new \Exception('Panel error');
                 }
-                return self::$panel;
+                if (self::$panel === null) {
+                    return null;
+                }
+                return new class(self::$panel) {
+                    public function __construct(private string $path) {}
+                    public function getPath(): string { return $this->path; }
+                };
             }
         }
     }

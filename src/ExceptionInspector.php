@@ -1,295 +1,281 @@
 <?php
+// file: src/ExceptionInspector.php
 
 declare(strict_types=1);
 
 namespace Isaidgitmenow\LaravelErrors;
 
-use Isaidgitmenow\LaravelErrors\Attributes\DontReport;
-use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
 use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
-use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
-use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
-use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
-use ReflectionClass;
+use Isaidgitmenow\LaravelErrors\Exceptions\AttributedHttpException;
+use Isaidgitmenow\LaravelErrors\Support\AttributeCache;
+use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
+use Isaidgitmenow\LaravelErrors\Support\Masker;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
+use WeakMap;
 
 /**
- * Inspects a Throwable to extract metadata defined via PHP 8 Attributes.
- *
- * It recursively traverses the exception chain via getPrevious() to find
- * attributes even on exceptions wrapped by Laravel (e.g. QueryException, ViewException).
- *
- * Results are statically cached per-request to avoid repeated Reflection overhead.
+ * Citește metadatele unei excepții. Static pentru compatibilitate cu API-ul existent,
+ * dar toată reflecția e delegată către AttributeCache (WP-01) și tot cache-ul per obiect
+ * e WeakMap (F-01: spl_object_id se reciclează; F-29: context() era executat de 5×).
  */
 final class ExceptionInspector
 {
-    /**
-     * Per-request static cache: class FQCN => extracted attribute data.
-     *
-     * @var array<string, array<string, mixed>>
-     */
-    private static array $cache = [];
+    private static ?WeakMap $originCache  = null;
+    private static ?WeakMap $contextCache = null;
+
+    // ---------------------------------------------------------------- origin & attributes
 
     /**
-     * Per-request origin cache: spl_object_id => resolved origin Throwable.
-     * Prevents O(chain_length × inspections) reflection traversals per request.
-     *
-     * @var array<int, Throwable>
-     */
-    private static array $originCache = [];
-
-    /**
-     * Resolve the "origin" exception - the deepest non-framework exception in the chain
-     * that carries our custom attributes, or the root if none found.
+     * Excepția „de interes": dezpachetează wrapper-ul nostru, apoi alege cel mai adânc nod
+     * care poartă atributele pachetului; altfel cauza-rădăcină.
      */
     public static function origin(Throwable $e): Throwable
     {
-        $oid = spl_object_id($e);
+        self::$originCache ??= new WeakMap();
 
-        if (isset(static::$originCache[$oid])) {
-            return static::$originCache[$oid];
+        if (isset(self::$originCache[$e])) {
+            return self::$originCache[$e];
         }
 
-        // Walk the chain looking for the deepest exception that carries our
-        // custom attributes. Track the deepest node as the fallback so that
-        // when NO exception in the chain has attributes we return the true
-        // root cause (deepest getPrevious()), not the outermost wrapper.
-        $attributed = null; // deepest node that has at least one of our attrs
-        $deepest    = $e;   // deepest node in the chain (root cause fallback)
-        $current    = $e;
+        $current = $e instanceof AttributedHttpException ? $e->original() : $e;
+        $attributed = null;
+        $deepest    = $current;
 
         while ($current !== null) {
             $deepest = $current;
-            if (static::hasAnyAttribute($current)) {
+            if (self::attributes($current) !== []) {
                 $attributed = $current;
             }
             $current = $current->getPrevious();
         }
 
-        $result = $attributed ?? $deepest;
-
-        return static::$originCache[$oid] = $result;
+        return self::$originCache[$e] = $attributed ?? $deepest;
     }
 
-    /**
-     * Get the HTTP status code for the exception.
-     * Checks #[HttpCode] attribute, then getCode() if in valid HTTP range.
-     */
+    /** @return array<string, mixed> */
+    public static function attributes(Throwable $e): array
+    {
+        return app(AttributeCache::class)->for($e::class);
+    }
+
+    public static function hasOwnAttributes(Throwable $e): bool
+    {
+        return self::attributes($e) !== [];
+    }
+
+    // ---------------------------------------------------------------- derived values
+
     public static function httpCode(Throwable $e): int
     {
-        $origin = static::origin($e);
-        $attrs = static::attributes($origin);
+        $origin = self::origin($e);
+        $attrs  = self::attributes($origin);
 
         if (isset($attrs['http_code'])) {
-            return $attrs['http_code'];
+            return (int) $attrs['http_code'];
         }
 
-        $code = $origin->getCode();
-
-        if (is_int($code) && $code >= 400 && $code < 600) {
-            return $code;
+        // Wrapper-ul nostru sau un HttpException real: statusul e de încredere.
+        if ($e instanceof HttpExceptionInterface) {
+            return $e->getStatusCode();
         }
 
-        return 500;
+        // F-26: getCode() ca status HTTP e o convenție a APLICAȚIEI, nu a PHP-ului.
+        // Opt-in, și doar pe excepția aruncată, nu pe cauza adâncă (SDK-uri terțe pun acolo statusul upstream).
+        if (config('errors.http_code_from_exception_code', false)) {
+            $code = $e->getCode();
+            if (is_int($code) && $code >= 400 && $code < 600) {
+                return $code;
+            }
+        }
+
+        return (int) config('errors.default_status', 500);
     }
 
-    /**
-     * Determine if this exception should NOT be reported to external services.
-     */
+    public static function hasHttpCodeAttribute(Throwable $e): bool
+    {
+        return isset(self::attributes(self::origin($e))['http_code']);
+    }
+
     public static function shouldNotReport(Throwable $e): bool
     {
-        return static::attributes(static::origin($e))['dont_report'] ?? false;
+        return (bool) (self::attributes(self::origin($e))['dont_report'] ?? false);
     }
 
-    /**
-     * Get the target reporting channels, if any.
-     * Returns null if the attribute is restricted to environments that don't match the current one.
-     *
-     * @return string[]|null
-     */
+    public static function errorCode(Throwable $e): ?string
+    {
+        return self::attributes(self::origin($e))['error_code']['code'] ?? null;
+    }
+
+    /** @return array{code: string, type: ?string, title: ?string}|null */
+    public static function errorCodeDefinition(Throwable $e): ?array
+    {
+        return self::attributes(self::origin($e))['error_code'] ?? null;
+    }
+
+    /** PSR-3. #[LogAs] explicit → derivat din status → 'error'. */
+    public static function logLevel(Throwable $e): string
+    {
+        $attrs = self::attributes(self::origin($e));
+
+        if (isset($attrs['log_as'])) {
+            return $attrs['log_as'];
+        }
+
+        if (isset($attrs['http_code'])) {
+            $status = (int) $attrs['http_code'];
+
+            return match (true) {
+                $status === 429 => 'notice',
+                $status === 503 => 'critical',
+                $status < 500   => 'warning',
+                default         => 'error',
+            };
+        }
+
+        return 'error';
+    }
+
+    public static function retryAfter(Throwable $e): ?int
+    {
+        return self::attributes(self::origin($e))['retry_after'] ?? null;
+    }
+
+    public static function rateLimit(Throwable $e): ?RateLimit
+    {
+        $rl = self::attributes(self::origin($e))['rate_limit'] ?? null;
+
+        return $rl === null ? null : new RateLimit($rl['max'], $rl['interval'], $rl['by']);
+    }
+
+    /** @return array{retention: string, category: string}|null */
+    public static function audit(Throwable $e): ?array
+    {
+        return self::attributes(self::origin($e))['audit'] ?? null;
+    }
+
+    /** @return string[]|null  null = nu e restricționat / nu are atributul */
     public static function reportToChannels(Throwable $e): ?array
     {
-        $attrs = static::attributes(static::origin($e));
-
+        $attrs    = self::attributes(self::origin($e));
         $channels = $attrs['report_to'] ?? null;
 
         if ($channels === null) {
             return null;
         }
 
-        // Environment filtering: if environments are specified, suppress in non-matching environments.
-        $environments = $attrs['report_to_environments'] ?? [];
-        if (!empty($environments) && !app()->environment($environments)) {
+        $envs = $attrs['report_to_environments'] ?? [];
+        if ($envs !== [] && ! app()->environment($envs)) {
             return null;
         }
 
-        return is_array($channels) ? $channels : [$channels];
+        return $channels;
     }
 
-    /**
-     * Get the translated frontend message for this exception, if any.
-     */
+    /** F-28: trans() poate întoarce array pentru o cheie de grup. I-06: parametri din proprietăți. */
     public static function translatedMessage(Throwable $e): ?string
     {
-        $origin = static::origin($e);
-        $key = static::attributes($origin)['translated_message'] ?? null;
+        $origin = self::origin($e);
+        $def    = self::attributes($origin)['translated_message'] ?? null;
 
-        if ($key === null) {
+        if ($def === null) {
             return null;
         }
 
-        $translated = trans($key);
+        $replace = [];
+        foreach ($def['params'] ?? [] as $placeholder => $source) {
+            if (is_int($placeholder)) {
+                $placeholder = $source;
+            }
+            $replace[$placeholder] = self::paramValue($origin, $source);
+        }
 
-        // Only return if translation was found (not just echoing back the key)
-        return $translated !== $key ? $translated : null;
+        $translated = isset($def['choice'])
+            ? trans_choice($def['key'], (int) self::paramValue($origin, $def['choice']), $replace)
+            : trans($def['key'], $replace);
+
+        if (! is_string($translated) || $translated === $def['key']) {
+            return null;
+        }
+
+        return $translated;
     }
 
     /**
-     * Extract contextual data from the exception's public properties as defined
-     * by the #[WithContext] attribute.
+     * Contextul #[WithContext], cu #[Sensitive] aplicat la extragere.
+     * Calculat O SINGURĂ DATĂ per obiect (F-29) — metodele #[WithContext] pot fi scumpe.
      *
      * @return array<string, mixed>
      */
     public static function context(Throwable $e): array
     {
-        $origin = static::origin($e);
-        $attrs  = static::attributes($origin);
-        $context = [];
+        self::$contextCache ??= new WeakMap();
 
-        // Class-level #[WithContext]: extract named public properties
+        $origin = self::origin($e);   // cheia e originalul: wrapper-ul (Handler) și originalul (hook, Sentry) → același calcul
+
+        if (isset(self::$contextCache[$origin])) {
+            return self::$contextCache[$origin];
+        }
+
+        $attrs  = self::attributes($origin);
+        $masks  = $attrs['sensitive'] ?? [];
+        $ctx    = [];
+
         foreach ($attrs['with_context'] ?? [] as $property) {
             if (property_exists($origin, $property)) {
-                $context[$property] = $origin->{$property};
+                $value = $origin->{$property};
+                $ctx[$property] = isset($masks[$property]) ? Masker::mask($value, $masks[$property]) : $value;
             }
         }
 
-        // Method-level #[WithContext]: invoke the method and merge the returned array
+        $methodMasks = $attrs['with_context_sensitive'] ?? [];
         foreach ($attrs['with_context_methods'] ?? [] as $method) {
-            if (method_exists($origin, $method)) {
-                $result = $origin->{$method}();
-                if (is_array($result)) {
-                    $context = array_merge($context, $result);
-                }
+            if (! method_exists($origin, $method)) {
+                continue;
+            }
+            $result = $origin->{$method}();
+            if (! is_array($result)) {
+                continue;
+            }
+            foreach ($result as $k => $v) {
+                $ctx[$k] = isset($methodMasks[$k]) ? Masker::mask($v, $methodMasks[$k]) : $v;
             }
         }
 
-        return $context;
+        return self::$contextCache[$origin] = $ctx;
     }
 
-    /**
-     * Get the rate limit configuration for this exception, if any.
-     */
-    public static function rateLimit(Throwable $e): ?RateLimit
+    /** Contextul trecut și prin lista globală de chei sensibile — forma care iese din pachet. */
+    public static function sanitizedContext(Throwable $e): array
     {
-        return static::attributes(static::origin($e))['rate_limit'] ?? null;
+        return DataSanitizer::sanitize(self::context($e), (array) config('errors.sanitize', []));
     }
 
-    /**
-     * Check if the exception (or any in its chain) has at least one of our custom attributes.
-     */
-    private static function hasAnyAttribute(Throwable $e): bool
-    {
-        $reflection = new ReflectionClass($e);
-        $ourAttributes = [
-            HttpCode::class,
-            DontReport::class,
-            ReportTo::class,
-            TranslatedMessage::class,
-            WithContext::class,
-            RateLimit::class,
-        ];
+    // ---------------------------------------------------------------- housekeeping
 
-        // Check class-level attributes
-        foreach ($ourAttributes as $attributeClass) {
-            if (!empty($reflection->getAttributes($attributeClass))) {
-                return true;
-            }
-        }
-
-        // Also check public methods for method-level #[WithContext]
-        foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
-            if (!empty($method->getAttributes(WithContext::class))) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Extract and cache all attributes from the exception's class.
-     *
-     * @return array<string, mixed>
-     */
-    private static function attributes(Throwable $e): array
-    {
-        $class = $e::class;
-
-        if (isset(static::$cache[$class])) {
-            return static::$cache[$class];
-        }
-
-        $reflection = new ReflectionClass($e);
-        $data = [];
-
-        // #[HttpCode]
-        $httpCodeAttrs = $reflection->getAttributes(HttpCode::class);
-        if (!empty($httpCodeAttrs)) {
-            $data['http_code'] = $httpCodeAttrs[0]->newInstance()->code;
-        }
-
-        // #[DontReport]
-        $dontReportAttrs = $reflection->getAttributes(DontReport::class);
-        if (!empty($dontReportAttrs)) {
-            $data['dont_report'] = true;
-        }
-
-        // #[ReportTo]
-        $reportToAttrs = $reflection->getAttributes(ReportTo::class);
-        if (!empty($reportToAttrs)) {
-            $instance = $reportToAttrs[0]->newInstance();
-            $data['report_to'] = $instance->channels;
-            $data['report_to_environments'] = $instance->environments;
-        }
-
-        // #[TranslatedMessage]
-        $translatedAttrs = $reflection->getAttributes(TranslatedMessage::class);
-        if (!empty($translatedAttrs)) {
-            $data['translated_message'] = $translatedAttrs[0]->newInstance()->key;
-        }
-
-        // #[WithContext] — class level (property list)
-        $withContextAttrs = $reflection->getAttributes(WithContext::class);
-        if (!empty($withContextAttrs)) {
-            $data['with_context'] = $withContextAttrs[0]->newInstance()->properties;
-        }
-
-        // #[WithContext] — method level (callable returning array)
-        $withContextMethods = [];
-        foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
-            if (!empty($method->getAttributes(WithContext::class))) {
-                $withContextMethods[] = $method->getName();
-            }
-        }
-        if (!empty($withContextMethods)) {
-            $data['with_context_methods'] = $withContextMethods;
-        }
-
-        // #[RateLimit]
-        $rateLimitAttrs = $reflection->getAttributes(RateLimit::class);
-        if (!empty($rateLimitAttrs)) {
-            $data['rate_limit'] = $rateLimitAttrs[0]->newInstance();
-        }
-
-        return static::$cache[$class] = $data;
-    }
-
-    /**
-     * Flush the static cache. Used in tests to prevent state leaking between runs.
-     */
     public static function flushCache(): void
     {
-        static::$cache      = [];
-        static::$originCache = [];
+        self::$originCache  = new WeakMap();
+        self::$contextCache = new WeakMap();
+        if (app()->bound(AttributeCache::class)) {
+            app(AttributeCache::class)->flushRuntime();
+        }
+    }
+
+    private static function paramValue(Throwable $origin, string $source): mixed
+    {
+        $masks = self::attributes($origin)['sensitive'] ?? [];
+
+        if (property_exists($origin, $source)) {
+            $v = $origin->{$source};
+
+            return isset($masks[$source]) ? Masker::mask($v, $masks[$source]) : $v;
+        }
+
+        if (method_exists($origin, $source)) {
+            return $origin->{$source}();
+        }
+
+        return '';
     }
 }

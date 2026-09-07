@@ -48,8 +48,9 @@ describe('Fix #1: Laravel Context Injection', function () {
         $e = new ContextualManagerException('test');
         $manager->report($e);
 
-        $contextData = Context::getHidden('exception_context');
-        expect($contextData)->toBe(['user_id' => 99, 'order_id' => 'ORD-001']);
+        $contextData = Context::get('errors');
+        expect($contextData)->toBeArray();
+        expect($contextData[0]['context'])->toBe(['user_id' => 99, 'order_id' => 'ORD-001']);
     });
 
     it('sanitizes sensitive data before injecting into Laravel Context', function () {
@@ -62,8 +63,8 @@ describe('Fix #1: Laravel Context Injection', function () {
         $e = new SensitiveContextException('test');
         $manager->report($e);
 
-        $contextData = Context::getHidden('exception_context');
-        expect($contextData['api_token'])->toBe('[REDACTED]');
+        $contextData = Context::get('errors');
+        expect($contextData[0]['context']['api_token'])->toBe('[REDACTED]');
     });
 
     it('does not inject context when WithContext returns no data', function () {
@@ -76,8 +77,9 @@ describe('Fix #1: Laravel Context Injection', function () {
         // RuntimeException has no #[WithContext] attribute
         $manager->report(new RuntimeException('no context'));
 
-        // Should not set exception_context key at all
-        expect(Context::getHidden('exception_context'))->toBeNull();
+        // Should push empty context
+        $contextData = Context::get('errors');
+        expect($contextData[0]['context'])->toBe([]);
     });
 
 });
@@ -123,7 +125,7 @@ describe('Fix #3: Automatic RateLimitedReporter Wrapping', function () {
         // Third should be suppressed by RateLimitedReporter
         $manager->report($e);
 
-        Log::shouldHaveReceived('error')->times(2);
+        Log::shouldHaveReceived('log')->times(2);
     });
 
     it('does not wrap reporters when no #[RateLimit] attribute is set', function () {
@@ -144,7 +146,7 @@ describe('Fix #3: Automatic RateLimitedReporter Wrapping', function () {
         $manager->report($e);
         $manager->report($e);
 
-        Log::shouldHaveReceived('error')->times(5);
+        Log::shouldHaveReceived('log')->times(5);
     });
 
 });
@@ -154,16 +156,16 @@ describe('Fix #4: DataSanitizer in LogReporter', function () {
     it('redacts sensitive WithContext data from log output', function () {
         Log::spy();
 
-        $reporter = new \Isaidgitmenow\LaravelErrors\Reporters\LogReporter(
-            config: ['sanitize' => ['api_token']]
-        );
+        config(['errors.sanitize' => ['api_token']]);
+
+        $reporter = new \Isaidgitmenow\LaravelErrors\Reporters\LogReporter();
 
         $reporter->report(new SensitiveContextException('Sensitive data test'));
 
-        Log::shouldHaveReceived('error')
+        Log::shouldHaveReceived('log')
             ->once()
-            ->withArgs(function (string $message, array $context) {
-                return $context['api_token'] === '[REDACTED]';
+            ->withArgs(function (string $level, string $message, array $context) {
+                return $context['error_context']['api_token'] === '[REDACTED]';
             });
     });
 

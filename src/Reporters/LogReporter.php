@@ -1,4 +1,5 @@
 <?php
+// file: src/Reporters/LogReporter.php
 
 declare(strict_types=1);
 
@@ -7,20 +8,12 @@ namespace Isaidgitmenow\LaravelErrors\Reporters;
 use Illuminate\Support\Facades\Log;
 use Isaidgitmenow\LaravelErrors\Contracts\ErrorReporterInterface;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
-use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
+use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
 use Throwable;
 
-/**
- * Reports exceptions through Laravel's Log system.
- *
- * Respects #[ReportTo('channel')] to route logs to specific channels.
- * Enriches log entries with context data extracted via #[WithContext].
- */
 final class LogReporter implements ErrorReporterInterface
 {
-    public function __construct(
-        private readonly array $config = [],
-    ) {}
+    public function __construct(private readonly array $config = []) {}
 
     public function shouldReport(Throwable $e): bool
     {
@@ -29,37 +22,34 @@ final class LogReporter implements ErrorReporterInterface
 
     public function report(Throwable $e): bool
     {
-        $context = $this->buildContext($e);
+        $level   = ExceptionInspector::logLevel($e);
+        $message = ExceptionInspector::origin($e)->getMessage();
+        $context = [
+            'exception'     => ExceptionInspector::origin($e),      // F-25: Throwable → Monolog randează stack trace-ul (originalul, nu wrapper-ul)
+            'error_id'      => ErrorIdentity::for($e),
+            'error_code'    => ExceptionInspector::errorCode($e),
+            'error_context' => ExceptionInspector::sanitizedContext($e),   // sub cheie proprie: nu suprascrie meta
+        ];
+
         $channels = ExceptionInspector::reportToChannels($e);
 
-        if ($channels !== null) {
-            foreach ($channels as $channel) {
-                Log::channel($channel)->error($e->getMessage(), $context);
+        if ($channels === null) {
+            Log::log($level, $message, $context);
+
+            return true;
+        }
+
+        $configured = array_keys((array) config('logging.channels', []));
+
+        foreach ($channels as $channel) {
+            if (! in_array($channel, $configured, true)) {
+                // F-12: LogManager ar degrada TĂCUT pe emergency logger. Facem zgomot pe canalul default.
+                Log::log($level, $message, $context + ['laravel_errors_warning' => "Unknown log channel [{$channel}] in #[ReportTo]"]);
+                continue;
             }
-        } else {
-            Log::error($e->getMessage(), $context);
+            Log::channel($channel)->log($level, $message, $context);
         }
 
         return true;
-    }
-
-    private function buildContext(Throwable $e): array
-    {
-        $context = ExceptionInspector::context($e);
-
-        // FIX #4: Sanitize the context data before writing to log files.
-        $sanitizedContext = DataSanitizer::sanitize(
-            $context,
-            $this->config['sanitize'] ?? []
-        );
-
-        return array_merge(
-            [
-                'exception' => $e::class,
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-            ],
-            $sanitizedContext,
-        );
     }
 }

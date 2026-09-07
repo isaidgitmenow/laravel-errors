@@ -30,7 +30,7 @@ describe('RateLimitedReporter', function () {
         $reporter->report($e);
         $reporter->report($e);
 
-        Log::shouldHaveReceived('error')->times(3);
+        Log::shouldHaveReceived('log')->times(3);
     });
 
     it('suppresses reports above the rate limit threshold', function () {
@@ -49,7 +49,7 @@ describe('RateLimitedReporter', function () {
         $reporter->report($e);
         $reporter->report($e);
 
-        Log::shouldHaveReceived('error')->times(3);
+        Log::shouldHaveReceived('log')->times(3);
     });
 
     it('passes through when no RateLimit attribute is set', function () {
@@ -65,7 +65,7 @@ describe('RateLimitedReporter', function () {
         $reporter->report($e);
         $reporter->report($e);
 
-        Log::shouldHaveReceived('error')->times(5);
+        Log::shouldHaveReceived('log')->times(5);
     });
 
     it('uses separate cache keys for different exception types', function () {
@@ -86,7 +86,7 @@ describe('RateLimitedReporter', function () {
         // e2 should still pass through
         $reporter->report($e2);
 
-        Log::shouldHaveReceived('error')->times(4); // 3 from e1 + 1 from e2
+        Log::shouldHaveReceived('log')->times(4); // 3 from e1 + 1 from e2
     });
 
 });
@@ -99,7 +99,7 @@ describe('LogReporter', function () {
         $reporter = new LogReporter();
         $reporter->report(new RuntimeException('Test log message'));
 
-        Log::shouldHaveReceived('error')->once()->with('Test log message', \Mockery::type('array'));
+        Log::shouldHaveReceived('log')->once()->with('error', 'Test log message', \Mockery::type('array'));
     });
 
     it('always shouldReport', function () {

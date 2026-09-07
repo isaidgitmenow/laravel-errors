@@ -20,9 +20,20 @@ describe('FilamentRenderer', function () {
         $request = Request::create('/admin', 'GET');
         $response = $renderer->render(new \RuntimeException('System failure'), $request);
 
-        expect(\Filament\Notifications\Notification::$lastNotification['body'])->toBe('System failure');
+        // Uses masked message since it's a generic exception
+        expect(\Filament\Notifications\Notification::$lastNotification['title'])->toContain('Internal Server Error (ref: ');
+        expect($response)->toBeNull();
+    });
+
+    it('returns JSON for Livewire requests in Filament', function () {
+        $renderer = new FilamentRenderer();
+        $request = Request::create('/admin', 'POST', [], [], [], ['HTTP_X_LIVEWIRE' => 'true']);
+        $response = $renderer->render(new \RuntimeException('System failure'), $request);
+
         expect($response->getStatusCode())->toBe(500);
-        expect($response->getContent())->toBe('{"message":"System failure"}');
+        
+        $json = json_decode($response->getContent(), true);
+        expect($json['message'])->toContain('Internal Server Error (ref: ');
     });
 
     it('supports a custom filament_handler closure', function () {
@@ -47,30 +58,29 @@ describe('InertiaRenderer', function () {
         \Inertia\Inertia::flush();
     });
 
-    it('shares error as prop in default mode', function () {
+    it('renders a dedicated error page in default (page) mode', function () {
         $renderer = new InertiaRenderer();
         $request = Request::create('/dashboard', 'GET');
         
-        // Note: back()->withInput() requires session to be started, 
-        // but we can just test the mock side effects and the response type.
         $response = $renderer->render(new \RuntimeException('Inertia error'), $request);
 
-        expect(\Inertia\Inertia::$shared['error']['message'])->toBe('Inertia error');
-        expect($response)->toBeInstanceOf(\Illuminate\Http\RedirectResponse::class);
+        // Component defaults to ErrorPage
+        expect(\Inertia\Inertia::$rendered['component'])->toBe('ErrorPage');
+        expect(\Inertia\Inertia::$rendered['props']['message'])->toContain('Internal Server Error (ref: ');
+        expect($response->getStatusCode())->toBe(500);
     });
 
-    it('renders a dedicated error page in redirect mode', function () {
+    it('redirects with flash in flash mode', function () {
         $renderer = new InertiaRenderer([
-            'inertia_mode' => 'redirect',
-            'inertia_error_component' => 'CustomErrorPage'
+            'inertia_mode' => 'flash',
         ]);
         $request = Request::create('/dashboard', 'GET');
         
+        // Mocking the redirect is complex outside full Laravel context, so we just check it doesn't crash 
+        // and returns a RedirectResponse
         $response = $renderer->render(new \RuntimeException('Inertia error'), $request);
 
-        expect(\Inertia\Inertia::$rendered['component'])->toBe('CustomErrorPage');
-        expect(\Inertia\Inertia::$rendered['props']['message'])->toBe('Inertia error');
-        expect($response->getStatusCode())->toBe(500);
+        expect($response)->toBeInstanceOf(\Illuminate\Http\RedirectResponse::class);
     });
 });
 
@@ -81,7 +91,10 @@ describe('LivewireRenderer', function () {
         $response = $renderer->render(new \RuntimeException('Livewire fail'), $request);
 
         expect($response->getStatusCode())->toBe(500);
-        expect($response->getContent())->toBe('{"message":"Livewire fail"}');
+        
+        $json = json_decode($response->getContent(), true);
+        expect($json['message'])->toContain('Internal Server Error (ref: ');
+        expect($json['code'])->toBe('HTTP_500');
     });
 
     it('supports a custom livewire_handler closure', function () {
@@ -99,11 +112,12 @@ describe('LivewireRenderer', function () {
 });
 
 describe('WebRenderer', function () {
-    it('returns null to fall through to Laravel default web error pages', function () {
+    it('returns HTML for generic requests', function () {
         $renderer = new WebRenderer();
         $request = Request::create('/', 'GET');
         $response = $renderer->render(new \RuntimeException('Web fail'), $request);
 
-        expect($response)->toBeNull();
+        expect($response->getContent())->toContain('<h1>500</h1>');
+        expect($response->getContent())->toContain('Internal Server Error (ref: ');
     });
 });

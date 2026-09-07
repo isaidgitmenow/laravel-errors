@@ -6,65 +6,57 @@ namespace Isaidgitmenow\LaravelErrors\Renderers;
 
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
+use Isaidgitmenow\LaravelErrors\Exceptions\InvalidConfigurationException;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
+use Isaidgitmenow\LaravelErrors\Support\MessageResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Renders exceptions for Inertia.js contexts.
- *
- * Supports two modes (configured via config/errors.php 'inertia_mode'):
- * - 'props': Share error as a shared prop accessible in all Inertia pages.
- * - 'redirect': Render a dedicated error component via Inertia::render().
+ * Modes: page (Inertia::render), flash (back()->with()), redirect (alias for page).
+ * 'props' throws InvalidConfigurationException at boot (F-07).
  */
 final class InertiaRenderer implements ExceptionRendererInterface
 {
-    public function __construct(
-        private readonly array $config = [],
-    ) {}
+    public function __construct(private readonly array $config = []) {}
 
     public function render(Throwable $e, Request $request): ?Response
     {
-        if (!class_exists(\Inertia\Inertia::class)) {
+        if (! class_exists(\Inertia\Inertia::class)) {
             return null;
         }
 
-        $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
-        $statusCode = ExceptionInspector::httpCode($e);
-        $mode = $this->config['inertia_mode'] ?? 'props';
+        $status    = ExceptionInspector::httpCode($e);
+        $message   = MessageResolver::public($e, $status, $this->config);
+        $mode      = $this->config['inertia_mode'] ?? 'page';
+        $component = $this->config['inertia_error_component'] ?? 'ErrorPage';
 
-        if ($mode === 'redirect') {
-            $component = $this->config['inertia_error_component'] ?? 'ErrorPage';
+        $payload = [
+            'status'   => $status,
+            'message'  => $message,
+            'code'     => ExceptionInspector::errorCode($e) ?? 'HTTP_' . $status,
+            'error_id' => ErrorIdentity::for($e),
+        ];
 
-            return \Inertia\Inertia::render($component, [
-                'status'  => $statusCode,
-                'message' => $message,
-            ])->toResponse($request)->setStatusCode($statusCode);
-        }
+        return match ($mode) {
+            'page', 'redirect' => \Inertia\Inertia::render($component, $payload)
+                ->toResponse($request)
+                ->setStatusCode($status),
 
-        // Default: 'props' mode - share error as Inertia shared props
-        \Inertia\Inertia::share([
-            'error' => [
-                'status'  => $statusCode,
-                'message' => $message,
-            ],
-        ]);
+            'flash' => $this->flash($request, $payload, $status),
 
-        // Return a redirect to trigger a re-render of the current page with the
-        // error shared as Inertia props. Redirects MUST use 3xx status codes per
-        // HTTP spec — the actual error status is already in the shared props above.
-        // Using a non-3xx code on a RedirectResponse produces undefined behavior
-        // in HTTP clients (blank pages, ignored Location headers).
-        // Wrap in try/catch because back()->withInput() requires an active session,
-        // which may be absent in stateless API routes or certain test environments.
-        try {
-            return back()->withInput();
-        } catch (\Throwable) {
-            return new \Illuminate\Http\RedirectResponse(
-                $request->fullUrl(),
-                302,
-            );
-        }
+            default => null,
+        };
     }
 
+    private function flash(Request $request, array $payload, int $status): Response
+    {
+        try {
+            return back()->with('error', $payload)->setStatusCode($status);
+        } catch (Throwable) {
+            // No previous URL or session — fallback
+            return response()->redirectTo('/')->with('error', $payload)->setStatusCode(302);
+        }
+    }
 }

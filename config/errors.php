@@ -1,4 +1,5 @@
 <?php
+// file: config/errors.php  — stare finală 3.0
 
 declare(strict_types=1);
 
@@ -8,7 +9,6 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Isaidgitmenow\LaravelErrors\Detectors\ApiDetector;
 use Isaidgitmenow\LaravelErrors\Detectors\FilamentDetector;
 use Isaidgitmenow\LaravelErrors\Detectors\InertiaDetector;
@@ -20,7 +20,6 @@ use Isaidgitmenow\LaravelErrors\Renderers\InertiaRenderer;
 use Isaidgitmenow\LaravelErrors\Renderers\LivewireRenderer;
 use Isaidgitmenow\LaravelErrors\Renderers\WebRenderer;
 use Isaidgitmenow\LaravelErrors\Reporters\DebugbarReporter;
-use Isaidgitmenow\LaravelErrors\Reporters\LogReporter;
 use Isaidgitmenow\LaravelErrors\Reporters\XdebugReporter;
 
 return [
@@ -29,47 +28,141 @@ return [
     |--------------------------------------------------------------------------
     | ⚠️  Config Caching Compatibility
     |--------------------------------------------------------------------------
-    | This config file supports Closure values (json_formatter, livewire_handler,
-    | filament_handler). Closures CANNOT be serialized by `php artisan config:cache`.
-    |
-    | If you need config caching, use invokable class-strings instead of Closures:
+    | Closures CANNOT be serialized by `php artisan config:cache`.
+    | Use invokable class-strings instead:
     |   'json_formatter' => \App\ErrorFormatters\ApiFormatter::class,
-    |
-    | The class must be invokable (__invoke) or a Closure instance.
     */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Integrate with Laravel's Handler
+    |--------------------------------------------------------------------------
+    | Controls which Handler hooks ErrorHandler::handle() activates.
+    | Granular flags allow you to enable only the features you need.
+    |
+    | These flags affect BOOT-TIME registration. After changing them you must:
+    |   1. Clear cache:  php artisan errors:clear && php artisan config:clear
+    |   2. Rebuild cache: php artisan optimize
+    |
+    | PRODUCTION: bootstrap/cache/errors.php is REQUIRED when any flag is true.
+    | Run `php artisan errors:cache` during deploy (or `optimize`).
+    */
+    'integrate_with_laravel' => [
+        'map_http_code'  => false,    // map() per class: translate attributes to HttpExceptionInterface
+        'dont_report'    => false,    // dontReport() native for #[DontReport] classes
+        'json_decision'  => false,    // shouldRenderJsonWhen() via HandlerSlots + api_prefixes
+    ],
 
     /*
     |--------------------------------------------------------------------------
     | Debug Mode Behavior
     |--------------------------------------------------------------------------
-    | When APP_DEBUG=true, Spatie Ignition provides an excellent visual
-    | debugger. Setting this to true will let Ignition take over for
-    | Web and API contexts, while still running our custom renderers
-    | for Livewire, Inertia, and Filament.
+    | When true, Ignition takes over for non-interactive contexts while our
+    | renderers still handle Livewire, Inertia, and Filament.
     */
     'respect_debug_mode' => true,
 
     /*
     |--------------------------------------------------------------------------
+    | Error ID
+    |--------------------------------------------------------------------------
+    | ULID injected into responses, logs, and context. Useful for support
+    | tickets: "Please share the error_id shown on screen."
+    */
+    'error_id' => [
+        'enabled'     => true,
+        'header'      => 'X-Error-Id',
+        'payload_key' => 'error_id',
+        'in_message'  => true,     // append (ref: ULID) to the generic fallback message
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Problem Details (RFC 9457)
+    |--------------------------------------------------------------------------
+    */
+    'problem_details' => [
+        'enabled'           => false,
+        'type_base_url'     => null,     // null → config('app.url') . '/errors'
+        'legacy_message'    => true,     // keep `message` key alongside RFC fields
+        'expose_context'    => false,    // include sanitized #[WithContext] data
+        'unify_validation'  => false,    // render 422 ValidationException as Problem Details
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Message Exposure
+    |--------------------------------------------------------------------------
+    | 'attributed': raw message only for #[HttpCode] / #[TranslatedMessage] / HttpExceptionInterface
+    | 'always':     raw exception getMessage() (NOT recommended in production)
+    | 'never':      always generic fallback
+    */
+    'expose_messages' => 'attributed',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fallback Message Prefix
+    |--------------------------------------------------------------------------
+    | Translation key prefix for generic error messages. The package looks up
+    | `{prefix}.{status_code}` first, then falls back to Symfony status texts.
+    */
+    'fallback_message_prefix' => 'errors.http',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default HTTP Status
+    |--------------------------------------------------------------------------
+    | Status code when no #[HttpCode] and no HttpExceptionInterface is found.
+    */
+    'default_status' => 500,
+
+    /*
+    |--------------------------------------------------------------------------
+    | getCode() as HTTP Status
+    |--------------------------------------------------------------------------
+    | When true, $e->getCode() in the 400-599 range is used as the HTTP status.
+    | This is opt-in because many SDKs store vendor-specific codes there.
+    */
+    'http_code_from_exception_code' => false,
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Route Prefixes
+    |--------------------------------------------------------------------------
+    | URL prefixes that are always treated as JSON APIs, even when the client
+    | doesn't send Accept: application/json.
+    */
+    'api_prefixes' => ['api'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Native Throttle
+    |--------------------------------------------------------------------------
+    | When true (production only), #[RateLimit] is also registered via
+    | Handler::throttle() for framework-level suppression.
+    */
+    'native_throttle' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Xdebug IDE Enrichment
     |--------------------------------------------------------------------------
-    | When true, XdebugReporter will push #[WithContext] payloads directly to
-    | your IDE via xdebug_notify(). This is a purely local, zero-friction
-    | feature: it requires APP_DEBUG=true and Xdebug 3 to be installed.
-    | No .env variable is needed — toggle this key when publishing the config.
     */
     'enrich_xdebug' => true,
 
     /*
     |--------------------------------------------------------------------------
+    | Livewire Mode
+    |--------------------------------------------------------------------------
+    | 'hook': ComponentHook intercepts action exceptions (recommended)
+    | 'json': Livewire context detected → JSON response (legacy)
+    */
+    'livewire_mode' => 'hook',
+
+    /*
+    |--------------------------------------------------------------------------
     | Context Pipeline (Priority Order)
     |--------------------------------------------------------------------------
-    | Detectors are evaluated top-to-bottom. The first one that returns true
-    | wins. Its paired Renderer is called to build the HTTP response.
-    |
-    | You can add, remove, or reorder entries to extend the package for new
-    | frameworks or custom contexts. Values must implement the corresponding
-    | interfaces.
     */
     'contexts' => [
         FilamentDetector::class => FilamentRenderer::class,
@@ -81,17 +174,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Exception Pass-Through (Never Intercept)
+    | Exception Pass-Through
     |--------------------------------------------------------------------------
-    | These exception classes will always be handled by Laravel's default
-    | handler. This ensures that ValidationException (form errors, 422),
-    | AuthenticationException (login redirect, 401), etc. are never altered.
     */
     'pass_through' => [
         ValidationException::class,
         AuthenticationException::class,
         AuthorizationException::class,
-        HttpException::class,
         ModelNotFoundException::class,
         TokenMismatchException::class,
         HttpResponseException::class,
@@ -99,99 +188,86 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Chain Wrapper Pass-Through
+    |--------------------------------------------------------------------------
+    | Framework exceptions that wrap user exceptions. When the OUTER exception
+    | is NOT pass-through but the INNER (root cause) IS, the pass-through
+    | decision is inherited only for these known wrapper classes.
+    */
+    'pass_through_chain_wrappers' => [
+        \Illuminate\View\ViewException::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Reporters Pipeline
     |--------------------------------------------------------------------------
-    | Reporters are called in order for every exception that is NOT suppressed
-    | by #[DontReport]. To disable a reporter, remove it from the list.
-    | You can add custom reporters that implement ErrorReporterInterface.
+    | LogReporter is removed from defaults in 2.0: Laravel's native logger
+    | (enriched via context()) handles the logging. Use LogReporter only
+    | when you need #[ReportTo] channel-specific logging.
     */
     'reporters' => [
         XdebugReporter::class,
         DebugbarReporter::class,
-        LogReporter::class,
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Sensitive Data Sanitization
     |--------------------------------------------------------------------------
-    | These keys will be automatically redacted from request data, context,
-    | and any data sent to external reporters.
     */
     'sanitize' => [
-        'password',
-        'password_confirmation',
-        'current_password',
-        'api_key',
-        'api_token',
-        'token',
-        'secret',
-        'authorization',
-        'credit_card',
-        'card_number',
-        'cvv',
+        'password', 'password_confirmation', 'current_password',
+        'api_key', 'api_token', 'token', 'secret',
+        'authorization', 'credit_card', 'card_number', 'cvv',
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | JSON Response Formatter
+    | Attribute Scan Paths
     |--------------------------------------------------------------------------
-    | Define how API errors are formatted. Receives the Throwable and Request.
-    | Defaults to a Laravel-style response structure.
-    |
-    | The Closure must return an array that will be JSON-encoded.
-    |
-    | Example:
-    | 'json_formatter' => function (\Throwable $e, \Illuminate\Http\Request $request): array {
-    |     return ['error' => ['message' => $e->getMessage(), 'code' => $e->getCode()]];
-    | },
+    | Glob patterns for directories containing exception classes.
+    | The scanner uses PhpToken to find classes efficiently.
     */
-    'json_formatter' => null, // null = default Laravel-style {message, errors}
+    'scan_paths' => [
+        // app_path('Exceptions'),
+        // base_path('src/Domain/*/Exceptions'),
+    ],
 
     /*
     |--------------------------------------------------------------------------
-    | Livewire Response Handler
+    | Custom Formatters (Closures or invokable class-strings)
     |--------------------------------------------------------------------------
-    | Define how errors are surfaced to the user in Livewire components.
-    | Receives the Throwable, Request, and the current Livewire component instance.
-    |
-    | Example (using Wire UI Toasts):
-    | 'livewire_handler' => function (\Throwable $e, \Illuminate\Http\Request $request): void {
-    |     session()->flash('error', $e->getMessage());
-    | },
     */
+    'json_formatter'   => null,
     'livewire_handler' => null,
+    'filament_handler' => null,
 
     /*
     |--------------------------------------------------------------------------
-    | Inertia Response Mode
+    | Inertia
     |--------------------------------------------------------------------------
-    | 'props'    - Return errors as shared props (default, integrates with
-    |              Inertia's built-in error handling).
-    | 'redirect' - Redirect to a dedicated error page using Inertia::render().
-    |
-    | When 'redirect' is used, set 'inertia_error_component' to the name
-    | of your error page component (e.g., 'ErrorPage', 'Error/Index').
     */
-    'inertia_mode' => 'props', // 'props' or 'redirect'
-
+    'inertia_mode'            => 'page',    // page | flash | redirect
     'inertia_error_component' => 'ErrorPage',
 
     /*
     |--------------------------------------------------------------------------
-    | Filament Response Handler
+    | MCP Server
     |--------------------------------------------------------------------------
-    | When null, the package uses Filament's native Notification system.
-    | You may provide a custom Closure for full control.
-    |
-    | Example:
-    | 'filament_handler' => function (\Throwable $e, \Illuminate\Http\Request $request): void {
-    |     \Filament\Notifications\Notification::make()
-    |         ->title($e->getMessage())
-    |         ->danger()
-    |         ->send();
-    | },
     */
-    'filament_handler' => null, // null = use native Filament Notification
+    'mcp' => [
+        'max_log_lines' => 200,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Audit (3.0)
+    |--------------------------------------------------------------------------
+    */
+    'audit' => [
+        'enabled' => false,
+        'sinks'   => [],    // ['database', 'log_channel']
+    ],
 
 ];

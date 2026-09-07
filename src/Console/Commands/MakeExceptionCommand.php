@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use Isaidgitmenow\LaravelErrors\Console\Concerns\BuildsErrorStubs;
+use Isaidgitmenow\LaravelErrors\Console\Concerns\ValidatesErrorInput;
 
 /**
  * Artisan command to generate a decorated exception class.
@@ -20,6 +21,7 @@ use Isaidgitmenow\LaravelErrors\Console\Concerns\BuildsErrorStubs;
 class MakeExceptionCommand extends Command
 {
     use BuildsErrorStubs;
+    use ValidatesErrorInput;
 
     protected $signature = 'make:error
                             {name : The name of the exception class (e.g. PaymentFailed)}
@@ -36,7 +38,16 @@ class MakeExceptionCommand extends Command
 
     public function handle(): int
     {
-        $name = $this->argument('name');
+        try {
+            $name = $this->validatedClassName($this->argument('name'));
+            $this->validatedHttp($this->option('http'));
+            if ($this->option('report')) {
+                $this->validatedList($this->option('report'), 'report channel');
+            }
+        } catch (\InvalidArgumentException $ex) {
+            $this->components->error($ex->getMessage());
+            return self::FAILURE;
+        }
 
         [$namespace, $class] = $this->resolveNamespaceAndClass($name);
 
@@ -44,6 +55,13 @@ class MakeExceptionCommand extends Command
 
         if ($this->files->exists($targetPath)) {
             $this->components->error("Exception [{$class}] already exists.");
+            return self::FAILURE;
+        }
+
+        try {
+            $this->assertWithinBase($targetPath, app_path());
+        } catch (\InvalidArgumentException $ex) {
+            $this->components->error($ex->getMessage());
             return self::FAILURE;
         }
 

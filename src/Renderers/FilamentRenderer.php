@@ -7,55 +7,50 @@ namespace Isaidgitmenow\LaravelErrors\Renderers;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+use Isaidgitmenow\LaravelErrors\Support\CallableResolver;
+use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
+use Isaidgitmenow\LaravelErrors\Support\MessageResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Renders exceptions for Filament panel requests.
- *
- * Uses Filament's native Notification system by default for a seamless
- * visual experience within the admin panel.
- *
- * Supports a configurable 'filament_handler' Closure in config/errors.php
- * for custom notification logic.
+ * F-16: JSON doar pentru X-Livewire/ajax()/wantsJson(), altfel null → pagina HTML.
  */
 final class FilamentRenderer implements ExceptionRendererInterface
 {
-    public function __construct(
-        private readonly array $config = [],
-    ) {}
+    public function __construct(private readonly array $config = []) {}
 
     public function render(Throwable $e, Request $request): ?Response
     {
-        $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
-        $statusCode = ExceptionInspector::httpCode($e);
+        $status  = ExceptionInspector::httpCode($e);
+        $message = MessageResolver::public($e, $status, $this->config);
 
-        $handler = $this->config['filament_handler'] ?? null;
-
-        if ($handler instanceof \Closure) {
-            $result = $handler($e, $request);
-            // If the Closure returns a Response, honour it directly.
-            if ($result instanceof Response) {
-                return $result;
+        if (($handler = CallableResolver::resolve($this->config['filament_handler'] ?? null, 'filament_handler')) !== null) {
+            $handler($e, $request);
+        } else {
+            // Default: Filament notification
+            try {
+                if (class_exists(\Filament\Notifications\Notification::class)) {
+                    \Filament\Notifications\Notification::make()
+                        ->title($message)
+                        ->danger()
+                        ->send();
+                }
+            } catch (Throwable) {
+                // Notification requires session; may fail in some contexts
             }
-        } elseif ($this->isFilamentNotificationAvailable()) {
-            // Use native Filament Notification - dynamic to avoid hard dependency
-            \Filament\Notifications\Notification::make()
-                ->title(__('Error'))
-                ->body($message)
-                ->danger()
-                ->send();
         }
 
-        // Return a Livewire-compatible JSON response (Filament is Livewire-based)
+        // F-16: JSON only for AJAX/Livewire requests, otherwise let HTML page render
+        if (! $request->hasHeader('X-Livewire') && ! $request->ajax() && ! $request->wantsJson()) {
+            return null;
+        }
+
         return response()->json([
-            'message' => $message,
-        ], $statusCode);
-    }
-
-
-    private function isFilamentNotificationAvailable(): bool
-    {
-        return class_exists(\Filament\Notifications\Notification::class);
+            'message'  => $message,
+            'errors'   => [],
+            'code'     => ExceptionInspector::errorCode($e) ?? 'HTTP_' . $status,
+            'error_id' => ErrorIdentity::for($e),
+        ], $status);
     }
 }

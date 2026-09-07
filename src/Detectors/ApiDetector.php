@@ -1,4 +1,5 @@
 <?php
+// file: src/Detectors/ApiDetector.php  (2.0; în 2.2 delegă la HandlerSlots)
 
 declare(strict_types=1);
 
@@ -6,20 +7,14 @@ namespace Isaidgitmenow\LaravelErrors\Detectors;
 
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ContextDetectorInterface;
+use Isaidgitmenow\LaravelErrors\Support\HandlerSlots;
 use Throwable;
 
-/**
- * Detects if the current request expects a JSON response (API clients).
- *
- * Matches requests that:
- * - Have Accept: application/json header
- * - Or explicitly call for JSON (wantsJson())
- * - Or are AJAX requests without Inertia/Livewire headers
- */
+/** O singură regulă „e API?", folosită și de shouldRenderJsonWhen() — altfel Laravel și pachetul decid diferit. */
 final class ApiDetector implements ContextDetectorInterface
 {
     public function detect(Throwable $e, Request $request): bool
     {
-        return $request->wantsJson() || $request->is('api/*');
+        return app(HandlerSlots::class)->shouldRenderJson($request, $e);
     }
 }

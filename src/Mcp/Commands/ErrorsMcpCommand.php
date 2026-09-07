@@ -54,7 +54,7 @@ class ErrorsMcpCommand extends Command
         // ── ANSI bypass ─────────────────────────────────────────────────────────
         // Prevent Laravel's ConsoleExceptionRenderer from dumping colorized ANSI
         // text to STDOUT, which would instantly break the JSON-RPC protocol.
-        ErrorManager::bypassConsoleExceptions();
+        app(\Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface::class)->bypassConsoleExceptions(true);
 
         // ── Start the server ────────────────────────────────────────────────────
         $server = new McpServer(

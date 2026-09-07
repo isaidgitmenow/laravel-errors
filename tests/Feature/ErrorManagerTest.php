@@ -21,7 +21,6 @@ use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     ExceptionInspector::flushCache();
-    ErrorManager::flushPassThrough();
     Cache::flush();
 });
 
@@ -270,13 +269,13 @@ describe('Context Detector Ordering', function () {
 
 describe('Dynamic Pass-Through', function () {
     it('bypasses the pipeline for dynamically registered exceptions', function () {
-        ErrorManager::passThrough(InvalidArgumentException::class);
-
         $manager = new ErrorManager(config: [
             'pass_through' => [],
             'contexts'     => [WebDetector::class => \Isaidgitmenow\LaravelErrors\Renderers\WebRenderer::class],
             'reporters'    => [],
         ]);
+
+        $manager->addPassThrough(InvalidArgumentException::class);
 
         $request  = Request::create('/test', 'GET');
         $response = $manager->render(new InvalidArgumentException('Should pass through'), $request);
@@ -285,13 +284,13 @@ describe('Dynamic Pass-Through', function () {
     });
 
     it('merges config pass_through with dynamically registered ones', function () {
-        ErrorManager::passThrough(InvalidArgumentException::class);
-
         $manager = new ErrorManager(config: [
             'pass_through' => [ValidationException::class],
             'contexts'     => [WebDetector::class => \Isaidgitmenow\LaravelErrors\Renderers\WebRenderer::class],
             'reporters'    => [],
         ]);
+
+        $manager->addPassThrough(InvalidArgumentException::class);
 
         $request = Request::create('/test', 'GET');
 
@@ -300,8 +299,6 @@ describe('Dynamic Pass-Through', function () {
     });
 
     it('does not affect exceptions not in the pass-through list', function () {
-        ErrorManager::passThrough(InvalidArgumentException::class);
-
         // Stub catch-all detector + renderer
         $catchAllDetector = new class implements ContextDetectorInterface {
             public function detect(\Throwable $e, Request $request): bool { return true; }
@@ -321,6 +318,8 @@ describe('Dynamic Pass-Through', function () {
             'contexts'     => [$catchAllDetector::class => $catchAllRenderer::class],
             'reporters'    => [],
         ]);
+
+        $manager->addPassThrough(InvalidArgumentException::class);
 
         $request  = Request::create('/test', 'GET');
         $response = $manager->render(new RuntimeException('Normal exception'), $request);
@@ -354,7 +353,7 @@ describe('RateLimitedReporter Caching', function () {
         $reporter->report($e); // hit 2 → allowed
         $reporter->report($e); // hit 3 → suppressed (max is 2)
 
-        Log::shouldHaveReceived('error')->times(2);
+        Log::shouldHaveReceived('log')->times(2);
     });
 
     it('cache keys are isolated per exception class', function () {
@@ -374,6 +373,6 @@ describe('RateLimitedReporter Caching', function () {
         $reporter->report($normal);
 
         // 2 from $limited + 2 from $normal
-        Log::shouldHaveReceived('error')->times(4);
+        Log::shouldHaveReceived('log')->times(4);
     });
 });

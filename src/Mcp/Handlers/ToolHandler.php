@@ -332,12 +332,13 @@ final class ToolHandler
 
         // Temporarily lift the MCP bypass so report() and render() actually run.
         // We also track the original state so we can restore it.
-        $reflection = new ReflectionClass(ErrorManager::class);
+        $manager = app(\Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface::class);
+        $reflection = new ReflectionClass($manager);
         $bypassProperty = $reflection->getProperty('bypassConsoleExceptions');
         $bypassProperty->setAccessible(true);
-        $wasBypassed = $bypassProperty->getValue();
+        $wasBypassed = $bypassProperty->getValue($manager);
 
-        ErrorManager::resetBypass();
+        $manager->bypassConsoleExceptions(false);
 
         $result    = ['success' => false, 'error' => 'unknown'];
         $txStarted = false;
@@ -357,8 +358,6 @@ final class ToolHandler
                 ? $ref->newInstanceArgs($constructorArgs)
                 : $ref->newInstance();
 
-            /** @var ErrorManager $manager */
-            $manager = app(ErrorManager::class);
             $manager->report($exception);
 
             $response = $manager->render($exception, $request);
@@ -386,7 +385,7 @@ final class ToolHandler
             
             // Restore the bypass state
             if ($wasBypassed) {
-                ErrorManager::bypassConsoleExceptions();
+                $manager->bypassConsoleExceptions(true);
             }
             
             // Restore the original request in the container.
