@@ -1,6 +1,6 @@
 {
     "name": "isaidgitmenow/laravel-errors",
-    "description": "Declarative attribute-based exception handling for Laravel 11+. Manage errors, rate limits, and contextual logging using clean PHP 8.4 attributes.",
+    "description": "Cure your Laravel exception handling headaches. Manage errors, rate limits, and API responses using clean, declarative PHP 8.4 attributes.",
     "keywords": [
         "laravel",
         "error-handling",
