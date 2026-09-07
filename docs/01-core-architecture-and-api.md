@@ -50,15 +50,27 @@ The `ExceptionInspector` utilizes PHP Reflection to recursively traverse the exc
   Retrieves and translates the key defined by `#[TranslatedMessage]`. Returns `null` if the translation doesn't exist.
 - **`context(Throwable $e): array`**
   Extracts public properties defined by `#[WithContext]` as an associative array.
-- **`rateLimit(Throwable $e): ?RateLimit`**
-  Returns the `RateLimit` attribute instance if present.
+- **`audit(Throwable $e): ?array`**
+  Returns the audit configuration (retention, category) defined by `#[Audit]`.
+- **`errorCode(Throwable $e): ?array`**
+  Returns the custom error code configuration defined by `#[ErrorCode]`.
+- **`logLevel(Throwable $e): string`**
+  Returns the custom log level defined by `#[LogAs]` or `error` by default.
+- **`rateLimit(Throwable $e): ?array`**
+  Returns the `RateLimit` attribute data if present.
 - **`flushCache(): void`**
   Clears the static reflection cache. Useful during tests.
 
-### 4. Support Tools: `DataSanitizer`
+### 4. Support Tools
 
-- **`DataSanitizer::sanitize(array $data, array $hiddenKeys): array`**
-  Recursively traverses context data and redacts the values of any keys matching the `sanitize` array from `config/errors.php` (e.g., `password`, `api_token`), replacing them with `[REDACTED]`.
+- **`ErrorIdentity`**
+  Generates and retrieves a unique, lexicographically sortable ULID for each exception instance. This `error_id` is automatically attached to logs and returned in API responses to allow exact tracing.
+- **`CriticalLog`**
+  A fallback safety logger that writes directly to `storage/logs/errors-critical.log` using native file operations. This guarantees that even if the entire Laravel logging subsystem crashes or is misconfigured, critical exceptions (or exceptions from the ErrorManager itself) are never silently swallowed.
+- **`HandlerSlots`**
+  An instance-based repository resolved via the container that holds custom rendering and reporting callbacks registered by the user. Replaces static callback closures to ensure testing isolation and container compatibility.
+- **`Masker`**
+  Handles data sanitization. It recursively traverses context data and redacts sensitive keys using standard masks (e.g. `[REDACTED]`, `first_last`, `last4`) before they are written to logs or injected into the Laravel Context.
 
 ---
 

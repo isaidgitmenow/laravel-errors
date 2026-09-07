@@ -4,8 +4,8 @@
 
 The package behavior can be customized via the `config/errors.php` file.
 
-### 🔒 Data Sanitization (`DataSanitizer`)
-You can define an array of sensitive keys (case-insensitive) in the config. The `DataSanitizer` will recursively replace the values of these keys with `[REDACTED]` before they are written to logs or injected into the Laravel Context.
+### 🔒 Data Sanitization (`Masker`)
+You can define an array of sensitive keys (case-insensitive) in the config, and also use the `#[Sensitive]` attribute directly on exception properties. The `Masker` will recursively replace the values of these keys using standard masks (e.g. `[REDACTED]`, `first_last`, `last4`) before they are written to logs or injected into the Laravel Context.
 
 ```php
 // config/errors.php
@@ -548,22 +548,21 @@ By viewing exceptions not as "crashes", but as **rich data objects**, this packa
 
 ## 🌐 Advanced API: Complying with JSON:API Specification
 
-Many modern APIs adhere to the strict [JSON:API Specification](https://jsonapi.org/format/#errors). By default, Laravel returns a simple `{ "message": "...", "errors": {} }` structure. 
+Many modern APIs adhere to the strict [JSON:API Specification](https://jsonapi.org/format/#errors). By default, the package returns RFC 9457 problem details. 
 
-With this package, you can instantly upgrade your entire application to output strictly compliant JSON:API errors by leveraging the `json_formatter` closure in `config/errors.php`, combined with the exception attributes!
+With this package, you can instantly upgrade your entire application to output strictly compliant JSON:API errors by leveraging the `HandlerSlots` registry, combined with the exception attributes!
 
-### 1. Update the Config
-Open your `config/errors.php` and configure the globally applied `json_formatter`:
+### 1. Register the Custom Renderer
+Open your `AppServiceProvider` and configure the globally applied json formatter:
 
 ```php
-// config/errors.php
+use Isaidgitmenow\LaravelErrors\Support\HandlerSlots;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
 
-return [
-    // ...
-    
-    'json_formatter' => function (\Throwable $e, Request $request): array {
+public function boot()
+{
+    app(HandlerSlots::class)->onRenderJson(function (Request $request, \Throwable $e): array {
         $httpCode = ExceptionInspector::httpCode($e);
         $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
         $context = ExceptionInspector::context($e); // Extracted from #[WithContext]
@@ -578,8 +577,8 @@ return [
                 ]
             ]
         ];
-    },
-];
+    });
+}
 ```
 
 ### 2. Throw your exceptions normally

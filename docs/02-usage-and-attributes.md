@@ -59,8 +59,9 @@ class CardDeclinedException extends \Exception {}
 
 ### `#[WithContext(array $properties)]`
 Automatically extracts public properties from your exception class.
-1. The data is injected into Laravel 11's global `Context::addHidden('exception_context', ...)`.
+1. The data is injected into Laravel 11's global `Context::push('errors', ...)` and `Context::addHidden('errors', ...)`.
 2. Sentry, Flare, and your Log files will automatically pick this up.
+3. The data is automatically sanitized by the `Masker` if any keys match the `#[Sensitive]` configurations.
 
 ```php
 use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
@@ -86,6 +87,54 @@ use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
 
 #[RateLimit(max: 5, intervalInMinutes: 1)] // Max 5 logs per minute
 class ThirdPartyApiTimeoutException extends \Exception {}
+```
+
+### `#[Audit(string $retention, string $category)]`
+Marks the exception to be stored in an immutable audit trail sink (useful for financial or security records).
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\Audit;
+
+#[Audit(retention: '7 years', category: 'billing')]
+class PaymentFailedException extends \Exception {}
+```
+
+### `#[ErrorCode(string $code, string $type, string $title)]`
+Defines a specific, RFC 9457 compliant error code and type. This is returned to the frontend instead of the generic exception class name.
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\ErrorCode;
+
+#[ErrorCode(code: 'E_FUNDS', type: 'https://docs.api.com/errors/funds', title: 'Insufficient Funds')]
+class InsufficientFundsException extends \Exception {}
+```
+
+### `#[LogAs(string $level)]`
+Overrides the default `error` log level (e.g., changes it to `critical`, `warning`, `info`).
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\LogAs;
+
+#[LogAs('critical')]
+class SecurityBreachException extends \Exception {}
+```
+
+### `#[Sensitive(string $mask)]`
+Used on properties inside the exception class to automatically redact their value before they are logged or added to the context. Supports masks like `[REDACTED]`, `first_last`, `last4`, or `random`.
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\Sensitive;
+use Isaidgitmenow\LaravelErrors\Attributes\WithContext;
+
+#[WithContext(['cardNumber'])]
+class CardDeclinedException extends \Exception {
+    public function __construct(
+        #[Sensitive('last4')] 
+        public string $cardNumber
+    ) {
+        parent::__construct("Card declined.");
+    }
+}
 ```
 
 ---

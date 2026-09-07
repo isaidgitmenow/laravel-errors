@@ -27,8 +27,9 @@ test('it returns a formatted 422 error when the action is invalid', function () 
 
     // Assert the package applied the #[TranslatedMessage]
     $response->assertJson([
-        'message' => __('errors.invalid_action'),
-        'errors' => []
+        'title' => 'InvalidActionException',
+        'status' => 422,
+        'detail' => __('errors.invalid_action'),
     ]);
 });
 ```

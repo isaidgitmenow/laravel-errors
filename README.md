@@ -20,12 +20,14 @@ Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**
 - **Deep Attribute Inspection**: Safely traverses Laravel's wrapped exceptions (e.g., `QueryException`, `ViewException`) to find and apply your custom attributes on the original exception.
 - **Spatie Ignition & Laravel Debugbar Ready**: Seamlessly integrates with local developer tools without breaking production flows.
 - **Xdebug IDE Enrichment**: Push sanitized `#[WithContext]` payloads directly to your IDE as debug notifications.
+- **RFC 9457 Problem Details**: The API Renderer automatically formats errors according to the IETF RFC 9457 standard (Problem Details for HTTP APIs).
+- **ULID Error Identities**: Every error automatically generates a unique, sortable ULID (`ErrorIdentity`) that is injected into logs and the API response for exact tracing.
 - **Auto-Injection into Laravel Context**: Automatically forwards `#[WithContext]` data to downstream trackers like Sentry or Flare via Laravel 11's global `Context`.
-- **Data Sanitization**: Built-in redaction for sensitive keys (like passwords and API tokens) before they hit logs or external trackers.
+- **Deep Data Masking (`Masker`)**: Built-in redaction for sensitive keys using the `#[Sensitive]` attribute (supports `first_last`, `last4`, and `random` masking) before they hit logs or external trackers.
 - **Anti-Spam Rate Limiting**: Prevent cascading failures from exhausting your error tracker quotas using the `#[RateLimit]` attribute.
 - **Octane Compatible**: Automatically flushes the reflection cache and dynamic state after every request under Swoole / RoadRunner to prevent memory leaks.
 - **Dynamic Pass-Through**: Third-party packages can register exceptions to bypass the pipeline at runtime — no config edits required.
-- **Fallback Logging**: Ensures your application never runs completely blind by falling back to Laravel's default logger if no reporters are configured — whether via config or dynamically via `addReporter()`.
+- **Critical Fallback Logging (`CriticalLog`)**: Ensures your application never runs completely blind. If all reporters fail or none are configured, it writes to a dedicated `storage/logs/errors-critical.log`.
 - **Environment-Specific Reporting**: Restrict `#[ReportTo]` to specific environments (e.g., only send Slack alerts in `production`).
 - **`make:error` Artisan Command**: Scaffold fully decorated exception classes in seconds with `php artisan make:error`.
 - **Static Analysis Ready**: Ships with a `phpstan.neon.dist` pre-configured for [Larastan](https://github.com/larastan/larastan) level 5.

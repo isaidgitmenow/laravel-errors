@@ -266,8 +266,12 @@ class ItemOutOfStockException extends \Exception
 If this exception is thrown during an **API Request**, the `ApiRenderer` will return:
 ```json
 {
-    "message": "We are sorry, but this item just went out of stock!",
-    "errors": []
+    "title": "ItemOutOfStockException",
+    "status": 500,
+    "type": "https://httpstatuses.com/500",
+    "detail": "We are sorry, but this item just went out of stock!",
+    "error_id": "01H2X6K9AB1Y4M8PQR7VWXYZ09",
+    "instance": "/api/checkout"
 }
 ```
 

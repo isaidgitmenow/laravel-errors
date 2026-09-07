@@ -12,6 +12,8 @@ Reporters determine how errors are logged or sent to external trackers (like Sen
   A silent, purely local reporter that pushes `#[WithContext]` data directly to your IDE via `xdebug_notify()`. It bypasses rate limiting, ensuring you see the payload every time you refresh during debugging.
 - **`RateLimitedReporter`**:
   A dynamic proxy wrapper. The `ErrorManager` automatically wraps any reporter with this class if the exception carries the `#[RateLimit]` attribute. It uses Laravel's `RateLimiter` facade to suppress duplicate logs within the specified interval, saving API quota for Sentry/Flare.
+- **`AuditReporter`**:
+  Detects exceptions decorated with `#[Audit]` and dispatches them to configured `AuditSink` implementations. Useful for immutable, long-term compliance logs.
 
 ---
 

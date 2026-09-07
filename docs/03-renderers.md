@@ -18,7 +18,7 @@ The package uses a Strategy Pipeline to automatically identify the request type 
 
 ### 🔌 API Requests
 - **`ApiDetector`**: Matches requests calling `wantsJson()` or paths matching `api/*`.
-- **`ApiRenderer`**: Returns a standard JSON payload containing a `message` and `errors` array. The HTTP status code is applied from the `#[HttpCode]` attribute. This structure can be fully customized via a Closure in `config/errors.php`.
+- **`ApiRenderer`**: By default, it natively implements the **RFC 9457 Problem Details** standard for HTTP APIs (`application/problem+json`). The payload automatically includes `title`, `status`, `type`, `error_id`, and `instance`. You can completely customize this structure using the `HandlerSlots` registry if your frontend requires a different format.
 
 ### 🌐 Standard Web Requests
 - **`WebDetector`**: The fallback detector that always returns `true` if no other context matched.
@@ -65,7 +65,7 @@ You just need to create the Blade file:
 
 ## 📡 API Renderer Example
 
-When an exception is thrown during an API request (detected via `wantsJson()` or an `api/*` route), the `ApiRenderer` automatically takes over and formats the response as standard JSON.
+When an exception is thrown during an API request (detected via `wantsJson()` or an `api/*` route), the `ApiRenderer` automatically takes over and formats the response according to the **RFC 9457 Problem Details** standard.
 
 For example, using a custom exception:
 
@@ -78,26 +78,32 @@ use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
 class SubscriptionExpiredException extends \Exception {}
 ```
 
-If a client makes a JSON request and this exception is thrown, they will receive a clean `422 Unprocessable Entity` response:
+If a client makes a JSON request and this exception is thrown, they will receive a clean `422 Unprocessable Entity` response with the `application/problem+json` content type:
 
 ```json
 {
-    "message": "Your subscription has expired. Please renew to continue.",
-    "errors": []
+    "title": "SubscriptionExpiredException",
+    "status": 422,
+    "type": "https://httpstatuses.com/422",
+    "detail": "Your subscription has expired. Please renew to continue.",
+    "error_id": "01H2X6K9AB1Y4M8PQR7VWXYZ09",
+    "instance": "/api/billing/checkout"
 }
 ```
 
+The `error_id` is a ULID injected automatically by `ErrorIdentity`, making it incredibly easy to find this exact failure in your logs.
+
 ### Customizing the API Response Format
 
-If your frontend expects a different JSON structure (e.g., JSON:API specification), you can completely customize the payload globally by defining a `json_formatter` Closure in `config/errors.php`:
+If your frontend expects a different JSON structure (e.g., standard `{ "message": "...", "errors": [] }`), you can completely customize the payload globally by registering a closure in your AppServiceProvider using the `HandlerSlots` instance:
 
 ```php
-// config/errors.php
+use Isaidgitmenow\LaravelErrors\Support\HandlerSlots;
 use Illuminate\Http\Request;
 
-return [
-    // ...
-    'json_formatter' => function (\Throwable $e, Request $request) {
+public function boot()
+{
+    app(HandlerSlots::class)->onRenderJson(function (Request $request, \Throwable $e) {
         return [
             'success' => false,
             'error_type' => class_basename($e),
@@ -105,8 +111,8 @@ return [
             // You can even extract specific attributes
             'meta' => \Isaidgitmenow\LaravelErrors\ExceptionInspector::context($e),
         ];
-    },
-];
+    });
+}
 ```
 
 ---
@@ -144,24 +150,22 @@ The package catches the error and returns a clean JSON response containing the m
 
 ### Customizing the Livewire Handler
 
-You might want to trigger a frontend notification (like a Toast or a SweetAlert) when an error occurs during a Livewire request, rather than just returning a response. You can configure a global closure in `config/errors.php` using the `livewire_handler` key:
+You might want to trigger a frontend notification (like a Toast or a SweetAlert) when an error occurs during a Livewire request, rather than just returning a response. You can configure a global closure by registering it with `HandlerSlots`:
 
 ```php
-// config/errors.php
+use Isaidgitmenow\LaravelErrors\Support\HandlerSlots;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
 
-return [
-    // ...
-    'livewire_handler' => function (\Throwable $e, Request $request) {
+public function boot()
+{
+    app(HandlerSlots::class)->onRenderLivewire(function (Request $request, \Throwable $e) {
         $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
         
         // Flash the error to the session so a global Toast component can display it
         session()->flash('error', $message);
-        
-        // Or interact with Livewire's internal response (if needed)
-    },
-];
+    });
+}
 ```
 
 ---
@@ -210,17 +214,17 @@ The user simply sees a red Toast Notification in the corner of their screen!
 
 ### Customizing the Filament Handler
 
-If you want to customize how the notification looks, or if you want to perform other actions when an error occurs in Filament, you can define a `filament_handler` in `config/errors.php`:
+If you want to customize how the notification looks, or if you want to perform other actions when an error occurs in Filament, you can define a handler via `HandlerSlots`:
 
 ```php
-// config/errors.php
+use Isaidgitmenow\LaravelErrors\Support\HandlerSlots;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
 use Filament\Notifications\Notification;
 
-return [
-    // ...
-    'filament_handler' => function (\Throwable $e, Request $request) {
+public function boot()
+{
+    app(HandlerSlots::class)->onRenderFilament(function (Request $request, \Throwable $e) {
         $message = ExceptionInspector::translatedMessage($e) ?? $e->getMessage();
         
         Notification::make()
@@ -229,8 +233,8 @@ return [
             ->warning() // Make it a warning instead of danger
             ->duration(10000) // Stay on screen longer
             ->send();
-    },
-];
+    });
+}
 ```
 
 ---
