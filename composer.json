@@ -1,13 +1,24 @@
 {
     "name": "isaidgitmenow/laravel-errors",
-    "description": "Enterprise-grade, highly configurable error handling for Laravel 13.",
+    "description": "Declarative attribute-based exception handling for Laravel 11+. Manage errors, rate limits, and contextual logging using clean PHP 8.4 attributes.",
     "keywords": [
         "laravel",
         "error-handling",
         "exceptions",
+        "exception-handler",
+        "php",
+        "attributes",
         "filament",
         "inertia",
-        "livewire"
+        "livewire",
+        "api",
+        "problem-details",
+        "rfc-9457",
+        "sentry",
+        "flare",
+        "logging",
+        "rate-limiting",
+        "context"
     ],
     "homepage": "https://github.com/isaidgitmenow/laravel-errors",
     "license": "MIT",
