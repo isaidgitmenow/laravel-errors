@@ -22,7 +22,7 @@ use Throwable;
  */
 final class HandlerSlots
 {
-    /** @var list<Closure(Response, Throwable, Request): Response> */
+    /** @var list<Closure(Response, Throwable, Request): ?Response> */
     private array $respond = [];
 
     /** @var list<Closure(Request, Throwable): ?bool> */
