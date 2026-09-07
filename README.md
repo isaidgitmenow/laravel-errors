@@ -4,13 +4,34 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/isaidgitmenow/laravel-errors.svg?style=flat-square)](https://packagist.org/packages/isaidgitmenow/laravel-errors)
 [![Tests](https://img.shields.io/github/actions/workflow/status/isaidgitmenow/laravel-errors/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/isaidgitmenow/laravel-errors/actions/workflows/run-tests.yml)
 
+Stop wrestling with `bootstrap/app.php` and bloated Exception classes. **Laravel Errors** completely reimagines exception handling in Laravel 11+ using **PHP 8.4 Attributes**.
+
+Instead of writing custom `render()` and `report()` methods for every exception, or cluttering your global handler with complex `if ($e instanceof ...)` logic, you can now define how an exception behaves *declaratively*:
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\HttpCode;
+use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
+use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
+
+#[HttpCode(402)]
+#[ReportTo('slack', 'sentry')]
+#[RateLimit(maxExceptions: 5, perMinutes: 1)]
+class PaymentFailedException extends Exception
+{
+    // That's it! No render(), no report() methods.
+}
+```
+
+### 🚀 Why adopt this package today?
+- **Zero Boilerplate:** Ditch the massive `render` and `report` methods. Your exceptions become clean, SOLID-compliant data structures.
+- **Context-Aware Rendering:** Throw an error anywhere. The package automatically detects if the request is from **Livewire, Filament, Inertia, an API, or Web**, and formats the response perfectly so your frontend doesn't break.
+- **Save Your Error Quotas:** Native **Rate Limiting** (`#[RateLimit]`) prevents error spikes from exhausting your Sentry/Flare limits.
+- **Automatic Context Injection:** Attach data via `#[WithContext]` and it flows automatically into Laravel's global `Context`, your logs, and your bug trackers.
+- **Privacy Built-in:** Use `#[Sensitive]` to automatically redact passwords and API keys before they hit your logs.
+
 ```bash
 composer require isaidgitmenow/laravel-errors
 ```
-
-A powerful, elegant, and declarative error handling package for modern Laravel applications (Laravel 11+).
-
-Built with **PHP 8.4+ Attributes** and strictly adhering to **SOLID principles**, this package replaces traditional, boilerplate-heavy exception rendering and reporting methods with clean, declarative attributes directly on your Exception classes.
 
 ## ✨ Features
 
