@@ -10,7 +10,7 @@
         "livewire"
     ],
     "homepage": "https://github.com/isaidgitmenow/laravel-errors",
-    "license": ["GPL-3.0-or-later", "proprietary"],
+    "license": "MIT",
     "authors": [
         {
             "name": "isaidgitmenow",

@@ -203,13 +203,6 @@ composer phpstan
 ---
 ## 📜 License
 
-This package is **Dual Licensed**:
-- **Open Source (GPLv3):** Free for personal or open-source projects. If you use this package, your application must also be open-source under the GPLv3.
-- **Commercial Use:** If you are building a commercial, proprietary, or closed-source application, you **must** purchase a Commercial License.
-
-### Purchase a License
-To purchase a Commercial License, please visit **[unicweb.ro](https://unicweb.ro)** or contact **lucian.laravel@gmail.com** for inquiries.
-
-Please read the full [LICENSE Agreement](LICENSE) for complete details.
+The MIT License (MIT). Please see [License File](LICENSE) for more information.
 
 ---

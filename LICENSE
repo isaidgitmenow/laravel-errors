@@ -1,47 +1,21 @@
-# Dual License Agreement
+The MIT License (MIT)
 
-This software and associated documentation files (the "Software") are dual-licensed. You may choose to use the Software under either:
+Copyright (c) isaidgitmenow
 
-1. The GNU General Public License v3.0 (GPLv3) (Open Source License)
-2. A Commercial License (Proprietary License)
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
----
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-## Option 1: Open Source Use (GPLv3)
-
-If you are developing open-source software, you may use this Software under the terms of the GNU General Public License v3.0 (GPLv3). 
-
-Under this license, you are free to:
-- **Use, modify, and distribute** the Software.
-- **Incorporate** the Software into your open-source projects.
-
-**However, the GPLv3 is a "copyleft" license.** This means that if you distribute your application that uses this Software, your entire application must also be released under the GPLv3 or a compatible open-source license.
-
-You can view the full legal text of the GPLv3 at: https://www.gnu.org/licenses/gpl-3.0.html
-
----
-
-## Option 2: Commercial Use
-
-If you are a company, organization, or individual developing commercial, proprietary, or closed-source software and **do not wish to open-source your entire application**, you must purchase a Commercial License.
-
-A Commercial License grants you the right to:
-- Use the Software in closed-source, proprietary projects.
-- Distribute your proprietary software without being subject to the open-source requirements of the GPLv3.
-- Keep your codebase completely private and commercialize your application.
-
-### Steps to Purchase and Apply a Commercial License:
-
-1. **Purchase:** Visit our official licensing portal at `https://unicweb.ro` to buy a Commercial License. If you need a custom invoice, bulk licensing, or have special requirements, please email `lucian.laravel@gmail.com`.
-2. **Receive License:** Upon purchase, you will receive a unique License Key and a PDF copy of your Commercial License Agreement via email.
-3. **Record Keeping:** Store the Commercial License Agreement safely within your organization. This document serves as your legal proof that your company is exempt from the GPLv3 open-source requirements.
-4. **Usage:** You may now safely use, modify, and deploy the Software within your proprietary application. No further configuration or action is required in the software itself.
-
----
-
-## Summary of Restrictions
-
-- **Non-Paying Commercial Use is strictly prohibited.** You cannot use this package in a proprietary application without purchasing an active Commercial License.
-- **Removing Copyright Notices is prohibited.** You must not remove or alter any copyright notices or license files in the source code, regardless of the license you are using.
-
-By using this Software, you agree to comply with the terms of the license you have chosen (GPLv3 or Commercial). If you have any questions about licensing, please contact the author.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
