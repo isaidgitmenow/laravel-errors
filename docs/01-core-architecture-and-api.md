@@ -85,7 +85,7 @@ The package uses a pipeline of **Context Detectors** configured in `config/error
 
 Here is how the default detectors work:
 
-1. **`FilamentDetector`**: Safely checks if there is an active Filament panel running (`\Filament\Facades\Filament::getCurrentPanel() !== null`).
+1. **`FilamentDetector`**: Safely checks if the request path matches the active Filament panel's path (since in Filament v3, `getCurrentPanel()` is often globally bound).
 2. **`LivewireDetector`**: Checks if the request contains the `X-Livewire` header.
 3. **`InertiaDetector`**: Checks if the request contains the `X-Inertia` header.
 4. **`ApiDetector`**: Checks if the request expects JSON (`$request->wantsJson()`) or if the URL path starts with `/api/*`.

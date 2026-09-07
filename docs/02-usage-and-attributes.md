@@ -47,7 +47,7 @@ When `environments` is non-empty, the `ExceptionInspector` checks `app()->enviro
 
 See [Environment-Specific Reporting](04-reporters-and-integrations.md#environment-specific-reporting) for a full walkthrough.
 
-### `#[TranslatedMessage(string $key)]`
+### `#[TranslatedMessage(string $key, array $params = [], ?string $choice = null)]`
 Provides a user-friendly, translated error message key. Filament, Inertia, and API renderers will prioritize this message to present a safe error to the frontend.
 
 ```php
@@ -57,7 +57,7 @@ use Isaidgitmenow\LaravelErrors\Attributes\TranslatedMessage;
 class CardDeclinedException extends \Exception {}
 ```
 
-### `#[WithContext(array $properties)]`
+### `#[WithContext(array $properties = [], array $sensitive = [])]`
 Automatically extracts public properties from your exception class.
 1. The data is injected into Laravel 11's global `Context::push('errors', ...)` and `Context::addHidden('errors', ...)`.
 2. Sentry, Flare, and your Log files will automatically pick this up.
@@ -79,7 +79,7 @@ class PaymentFailedException extends \RuntimeException
 }
 ```
 
-### `#[RateLimit(int $max, int $intervalInMinutes)]`
+### `#[RateLimit(int $max, int $intervalInMinutes = 5, string $by = 'location')]`
 Protects your error trackers from being flooded (e.g., when a database goes down). If this exception occurs more than `$max` times within `$intervalInMinutes`, subsequent occurrences will be suppressed from reporters.
 
 ```php
@@ -135,6 +135,16 @@ class CardDeclinedException extends \Exception {
         parent::__construct("Card declined.");
     }
 }
+```
+
+### `#[RetryAfter(int $seconds)]`
+Allows you to attach a `Retry-After` HTTP header automatically to the response. Useful for rate-limiting exceptions or maintenance modes.
+
+```php
+use Isaidgitmenow\LaravelErrors\Attributes\RetryAfter;
+
+#[RetryAfter(60)] // Wait 60 seconds
+class ApiRateLimitExceededException extends \Exception {}
 ```
 
 ---
