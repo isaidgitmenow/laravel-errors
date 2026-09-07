@@ -86,7 +86,7 @@ final class HandlerSlots
         $response->headers->remove(self::RENDERED_HEADER);
 
         foreach ($this->respond as $cb) {
-            $response = $cb($response, $e, $request) ?? $response;
+            $response = $cb($response, $e, $request);
         }
 
         return $response;

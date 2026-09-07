@@ -9,8 +9,6 @@ use Symfony\Component\Finder\Finder;
 
 final class AttributeScanner
 {
-    private const MAX_FILES = 5000;
-
     public function __construct(private readonly AttributeReader $reader) {}
 
     /** @return list<string> căi absolute existente; suportă glob (src/Domain/* /Exceptions) */

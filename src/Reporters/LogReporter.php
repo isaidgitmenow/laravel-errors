@@ -13,7 +13,7 @@ use Throwable;
 
 final class LogReporter implements ErrorReporterInterface
 {
-    public function __construct(private readonly array $config = []) {}
+    public function __construct(array $config = []) {}
 
     public function shouldReport(Throwable $e): bool
     {

@@ -17,7 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class ValidationProblemRenderer
 {
-    public function __construct(private readonly array $config = []) {}
+    public function __construct(array $config = []) {}
 
     public function render(ValidationException $e, Request $request): ?Response
     {
