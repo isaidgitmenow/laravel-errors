@@ -14,13 +14,14 @@ trait BuildsErrorStubs
 {
     /**
      * Build the stub contents with all replacements applied.
+     * N-07: Accepts validated http, channels, envs — no longer reads options directly.
      */
-    private function buildStub(string $namespace, string $class): string
+    private function buildStub(string $namespace, string $class, int $http = 500, array $channels = [], array $envs = []): string
     {
         $stub = $this->files->get($this->stubPath());
 
-        $useStatements = $this->buildUseStatements();
-        $attributes    = $this->buildAttributes();
+        $useStatements = $this->buildUseStatements($http, $channels);
+        $attributes    = $this->buildAttributes($http, $channels, $envs);
 
         return str_replace(
             ['{{ namespace }}', '{{ class }}', '{{ use_statements }}', '{{ class_attributes }}'],
@@ -32,16 +33,15 @@ trait BuildsErrorStubs
     /**
      * Build the `use` import statements based on options.
      */
-    private function buildUseStatements(): string
+    private function buildUseStatements(int $http, array $channels): string
     {
         $uses = [];
 
-        $http = (int) $this->option('http');
         if ($http !== 500) {
             $uses[] = 'use Isaidgitmenow\\LaravelErrors\\Attributes\\HttpCode;';
         }
 
-        if ($this->option('report')) {
+        if ($channels !== []) {
             $uses[] = 'use Isaidgitmenow\\LaravelErrors\\Attributes\\ReportTo;';
         }
 
@@ -50,35 +50,29 @@ trait BuildsErrorStubs
 
     /**
      * Build the PHP 8 Attribute annotations for the class.
+     * N-07: Uses var_export() for channel/env values instead of string concatenation
+     * to prevent PHP injection through crafted --env values.
      */
-    private function buildAttributes(): string
+    private function buildAttributes(int $http, array $channels, array $envs): string
     {
         $lines = [];
 
-        $http = (int) $this->option('http');
         if ($http !== 500) {
             $lines[] = "#[HttpCode({$http})]";
         }
 
-        if ($reportOption = $this->option('report')) {
-            $channels = array_map(
-                fn (string $ch) => "'" . trim($ch) . "'",
-                explode(',', $reportOption),
-            );
+        if ($channels !== []) {
+            $channelArgs = array_map(fn (string $v) => var_export($v, true), $channels);
+            $envArgs     = array_map(fn (string $v) => var_export($v, true), $envs);
 
-            $envOption = $this->option('env');
-            if ($envOption) {
-                $envs = array_map(
-                    fn (string $env) => "'" . trim($env) . "'",
-                    explode(',', $envOption),
-                );
-                $lines[] = count($channels) === 1
-                    ? "#[ReportTo({$channels[0]}, environments: [" . implode(', ', $envs) . "])]"
-                    : "#[ReportTo([" . implode(', ', $channels) . "], environments: [" . implode(', ', $envs) . "])]";
+            if ($envs !== []) {
+                $lines[] = count($channelArgs) === 1
+                    ? "#[ReportTo({$channelArgs[0]}, environments: [" . implode(', ', $envArgs) . "])]"
+                    : "#[ReportTo([" . implode(', ', $channelArgs) . "], environments: [" . implode(', ', $envArgs) . "])]";
             } else {
-                $lines[] = count($channels) === 1
-                    ? "#[ReportTo({$channels[0]})]"
-                    : "#[ReportTo([" . implode(', ', $channels) . "])]";
+                $lines[] = count($channelArgs) === 1
+                    ? "#[ReportTo({$channelArgs[0]})]"
+                    : "#[ReportTo([" . implode(', ', $channelArgs) . "])]";
             }
         }
 

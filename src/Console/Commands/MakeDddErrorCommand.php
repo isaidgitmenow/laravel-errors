@@ -83,10 +83,9 @@ class MakeDddErrorCommand extends Command
             if ($domain) {
                 $domain = $this->validatedSegment($domain, 'domain');
             }
-            $this->validatedHttp($this->option('http'));
-            if ($this->option('report')) {
-                $this->validatedList($this->option('report'), 'report channel');
-            }
+            $http     = $this->validatedHttp($this->option('http'));
+            $channels = $this->option('report') ? $this->validatedList((string) $this->option('report'), 'report channel') : [];
+            $envs     = $this->option('env') ? $this->validatedList((string) $this->option('env'), 'environment') : [];
         } catch (\InvalidArgumentException $ex) {
             $this->components->error($ex->getMessage());
             return self::FAILURE;
@@ -117,7 +116,7 @@ class MakeDddErrorCommand extends Command
         }
 
         $this->files->ensureDirectoryExists(dirname($targetPath));
-        $this->files->put($targetPath, $this->buildStub($namespace, $class));
+        $this->files->put($targetPath, $this->buildStub($namespace, $class, $http, $channels, $envs));
 
         $this->components->info("Exception [{$class}] created in domain [{$domain}].");
         $this->components->twoColumnDetail('File', $targetPath);

@@ -13,8 +13,11 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Web renderer: tries app views (errors.{status}), then Laravel views, then package view.
- * In 2.0-2.2 this is a simple fallback; in 3.0 it renders a proper error page.
+ * Web renderer: tries app views (errors.{status}), then Laravel views (errors::{status}),
+ * then package view (laravel-errors::error), then returns null (let Laravel handle it).
+ *
+ * N-03: $message is escaped in fallback HTML to prevent XSS. The preferred path is to
+ * return null when no views exist so Laravel's own error page renders.
  */
 final class WebRenderer implements ExceptionRendererInterface
 {
@@ -33,18 +36,23 @@ final class WebRenderer implements ExceptionRendererInterface
             'context'  => app()->hasDebugModeEnabled() ? ExceptionInspector::sanitizedContext($e) : [],
         ];
 
-        // Try app views first, then package views
-        foreach (["errors.{$status}", "laravel-errors::error"] as $view) {
-            if (view()->exists($view)) {
-                return response()->view($view, $data, $status);
-            }
+        // 1. App views first (published error pages)
+        if (view()->exists("errors.{$status}")) {
+            return response()->view("errors.{$status}", $data, $status);
         }
 
-        // Ultimate fallback: minimal HTML
-        return response(
-            "<h1>{$status}</h1><p>{$message}</p>",
-            $status,
-            ['Content-Type' => 'text/html']
-        );
+        // 2. Laravel's default error views (after Handler::registerErrorViewPaths())
+        if (view()->exists("errors::{$status}")) {
+            return response()->view("errors::{$status}", $data, $status);
+        }
+
+        // 3. Package view
+        if (view()->exists('laravel-errors::error')) {
+            return response()->view('laravel-errors::error', $data, $status);
+        }
+
+        // 4. Return null → let Laravel handle it with its own error pages
+        // This is safer than rendering raw HTML, especially for 404/403/419/405.
+        return null;
     }
 }

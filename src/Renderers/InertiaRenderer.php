@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Isaidgitmenow\LaravelErrors\Renderers;
 
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
-use Isaidgitmenow\LaravelErrors\Exceptions\InvalidConfigurationException;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
 use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
 use Isaidgitmenow\LaravelErrors\Support\MessageResolver;
@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Modes: page (Inertia::render), flash (back()->with()), redirect (alias for page).
+ * Modes: page (Inertia::render), flash (back()->with()), redirect (alias for page), respond (3.0 via HandlerSlots).
  * 'props' throws InvalidConfigurationException at boot (F-07).
  */
 final class InertiaRenderer implements ExceptionRendererInterface
@@ -44,19 +44,26 @@ final class InertiaRenderer implements ExceptionRendererInterface
                 ->toResponse($request)
                 ->setStatusCode($status),
 
-            'flash' => $this->flash($request, $payload, $status),
+            'flash' => $this->flash($request, $payload),
+
+            // N-10: 'respond' is accepted but not yet implemented (3.0) — return null to let Laravel handle it
+            'respond' => null,
 
             default => null,
         };
     }
 
-    private function flash(Request $request, array $payload, int $status): Response
+    /**
+     * N-09: Don't set non-3xx status on redirect — browser ignores Location with 402.
+     * Always use 302 for flash redirects.
+     */
+    private function flash(Request $request, array $payload): Response
     {
         try {
-            return back()->with('error', $payload)->setStatusCode($status);
+            return back()->with('error', $payload);
         } catch (Throwable) {
-            // No previous URL or session — fallback
-            return response()->redirectTo('/')->with('error', $payload)->setStatusCode(302);
+            // No previous URL or session — fallback redirect without with()
+            return new RedirectResponse($request->fullUrl(), 302);
         }
     }
 }

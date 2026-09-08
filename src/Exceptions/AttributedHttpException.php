@@ -47,7 +47,10 @@ abstract class AttributedHttpException extends \RuntimeException implements Http
         // Handler face container->call([$e,'report']) și se oprește dacă rezultatul !== false.
         // Originalul poate declara report(SomeService $s) → îl apelăm tot prin container, nu direct.
         // Dacă originalul nu are report(), întoarcem false ca să nu oprim nimic.
-        return method_exists($this->original, 'report') ? app()->call([$this->original, 'report']) : false;
+        // Reflector::isCallable, nu method_exists: un report() protected/private ar face container->call() să arunce.
+        return \Illuminate\Support\Reflector::isCallable([$this->original, 'report'])
+            ? app()->call([$this->original, 'report'])
+            : false;
     }
 
     public function render(mixed $request): mixed

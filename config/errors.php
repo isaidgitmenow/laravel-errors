@@ -163,12 +163,13 @@ return [
     |--------------------------------------------------------------------------
     | Context Pipeline (Priority Order)
     |--------------------------------------------------------------------------
+    | ApiDetector FIRST: a JSON-expecting request is API regardless of context.
     */
     'contexts' => [
-        FilamentDetector::class => FilamentRenderer::class,
+        ApiDetector::class      => ApiRenderer::class,      // primul: cine cere JSON e API oriunde
         LivewireDetector::class => LivewireRenderer::class,
+        FilamentDetector::class => FilamentRenderer::class,  // inversează cu Livewire dacă vrei Notification pe fallback
         InertiaDetector::class  => InertiaRenderer::class,
-        ApiDetector::class      => ApiRenderer::class,
         WebDetector::class      => WebRenderer::class,
     ],
 
@@ -176,11 +177,14 @@ return [
     |--------------------------------------------------------------------------
     | Exception Pass-Through
     |--------------------------------------------------------------------------
+    | Bypasses package reporters AND renderers. Decided on the thrown exception (F-06).
+    | Our wrapper does NOT extend Symfony\HttpException, so it won't be caught.
     */
     'pass_through' => [
         ValidationException::class,
         AuthenticationException::class,
         AuthorizationException::class,
+        \Symfony\Component\HttpKernel\Exception\HttpException::class,   // N-02: wrapper-ul nostru NU e HttpException
         ModelNotFoundException::class,
         TokenMismatchException::class,
         HttpResponseException::class,
@@ -215,11 +219,12 @@ return [
     |--------------------------------------------------------------------------
     | Sensitive Data Sanitization
     |--------------------------------------------------------------------------
+    | Matched on substring — avoid short tokens: 'pan' would redact company_id, participant, etc.
     */
     'sanitize' => [
         'password', 'password_confirmation', 'current_password',
         'api_key', 'api_token', 'token', 'secret',
-        'authorization', 'credit_card', 'card_number', 'cvv',
+        'authorization', 'credit_card', 'card_number', 'cvv', 'iban',
     ],
 
     /*
@@ -228,10 +233,11 @@ return [
     |--------------------------------------------------------------------------
     | Glob patterns for directories containing exception classes.
     | The scanner uses PhpToken to find classes efficiently.
+    | AttributeScanner::resolvePaths() also adds DDD domain paths at runtime.
     */
     'scan_paths' => [
-        // app_path('Exceptions'),
-        // base_path('src/Domain/*/Exceptions'),
+        app_path('Exceptions'),
+        base_path('src/Domain') . '/*/Exceptions',
     ],
 
     /*
@@ -242,13 +248,21 @@ return [
     'json_formatter'   => null,
     'livewire_handler' => null,
     'filament_handler' => null,
+    'metrics'          => null,   // Closure | class-string invokable | null — receives ExceptionReported (MetricsListener)
+
+    /*
+    |--------------------------------------------------------------------------
+    | Web Renderer
+    |--------------------------------------------------------------------------
+    */
+    'web_renderer' => ['prefer_laravel_views' => true],   // errors::{status} of Laravel before package view
 
     /*
     |--------------------------------------------------------------------------
     | Inertia
     |--------------------------------------------------------------------------
     */
-    'inertia_mode'            => 'page',    // page | flash | redirect
+    'inertia_mode'            => 'page',    // page | flash | respond  ('redirect' alias for page; 'props' throws at boot)
     'inertia_error_component' => 'ErrorPage',
 
     /*
@@ -257,7 +271,10 @@ return [
     |--------------------------------------------------------------------------
     */
     'mcp' => [
-        'max_log_lines' => 200,
+        'max_log_lines'   => 200,
+        'log_file_mode'   => 0664,
+        'log_dir_mode'    => 0775,
+        'simulate_namespaces' => ['', 'Illuminate\\', 'Symfony\\Component\\HttpKernel\\Exception\\'],
     ],
 
     /*
@@ -267,6 +284,9 @@ return [
     */
     'audit' => [
         'enabled' => false,
+        'sink'    => 'database',
+        'table'   => 'error_audit',
+        'log_channel' => 'audit',
         'sinks'   => [],    // ['database', 'log_channel']
     ],
 

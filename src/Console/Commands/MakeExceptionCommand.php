@@ -16,7 +16,7 @@ use Isaidgitmenow\LaravelErrors\Console\Concerns\ValidatesErrorInput;
  * Usage:
  *   php artisan make:error PaymentFailed
  *   php artisan make:error PaymentFailed --http=402
- *   php artisan make:error PaymentFailed --http=402 --report=slack
+ *   php artisan make:error PaymentFailed --http=402 --report=slack --env=production
  */
 class MakeExceptionCommand extends Command
 {
@@ -39,34 +39,27 @@ class MakeExceptionCommand extends Command
     public function handle(): int
     {
         try {
-            $name = $this->validatedClassName($this->argument('name'));
-            $this->validatedHttp($this->option('http'));
-            if ($this->option('report')) {
-                $this->validatedList($this->option('report'), 'report channel');
-            }
-        } catch (\InvalidArgumentException $ex) {
-            $this->components->error($ex->getMessage());
-            return self::FAILURE;
-        }
+            $name     = $this->validatedClassName((string) $this->argument('name'));
+            $http     = $this->validatedHttp($this->option('http'));
+            // N-07: Validate --report AND --env, not just --report
+            $channels = $this->option('report') ? $this->validatedList((string) $this->option('report'), 'report channel') : [];
+            $envs     = $this->option('env') ? $this->validatedList((string) $this->option('env'), 'environment') : [];
 
-        [$namespace, $class] = $this->resolveNamespaceAndClass($name);
-
-        $targetPath = $this->resolveTargetPath($namespace, $class);
-
-        if ($this->files->exists($targetPath)) {
-            $this->components->error("Exception [{$class}] already exists.");
-            return self::FAILURE;
-        }
-
-        try {
+            [$namespace, $class] = $this->resolveNamespaceAndClass($name);
+            $targetPath = $this->resolveTargetPath($namespace, $class);
             $this->assertWithinBase($targetPath, app_path());
         } catch (\InvalidArgumentException $ex) {
             $this->components->error($ex->getMessage());
             return self::FAILURE;
         }
 
-        $this->files->ensureDirectoryExists(dirname($targetPath));
-        $this->files->put($targetPath, $this->buildStub($namespace, $class));
+        if ($this->files->exists($targetPath)) {
+            $this->components->error("Exception [{$class}] already exists.");
+            return self::FAILURE;
+        }
+
+        $this->files->ensureDirectoryExists(dirname($targetPath));    // ABIA ACUM atingem discul
+        $this->files->put($targetPath, $this->buildStub($namespace, $class, $http, $channels, $envs));
 
         $this->components->info("Exception [{$class}] created successfully.");
         $this->components->twoColumnDetail('File', $targetPath);
@@ -96,13 +89,16 @@ class MakeExceptionCommand extends Command
 
     /**
      * Resolve the absolute file path for the generated class.
+     * N-08: Use substr with prefix check instead of str_replace (which corrupts AppPayments → Payments).
      */
     private function resolveTargetPath(string $namespace, string $class): string
     {
-        $baseNamespace = rtrim($this->laravel->getNamespace(), '\\');
-        $relativePath = str_replace($baseNamespace, '', $namespace);
-        $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $relativePath);
+        $base = rtrim($this->laravel->getNamespace(), '\\');
+        // F-13: substr pe prefix, nu str_replace (App\Exceptions\AppPayments devenea Exceptions/Payments)
+        $relative = ($namespace === $base || str_starts_with($namespace, $base . '\\'))
+            ? substr($namespace, strlen($base))
+            : $namespace;
 
-        return app_path(ltrim($relativePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $class . '.php');
+        return app_path(ltrim(str_replace('\\', DIRECTORY_SEPARATOR, $relative), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $class . '.php');
     }
 }

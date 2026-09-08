@@ -52,14 +52,19 @@ final class ErrorManager implements ErrorManagerInterface
         if ($this->bypassConsoleExceptions) {
             return true;    // procesul MCP: nu rulăm nimic, dar Laravel poate loga în fișier (nu atinge STDOUT)
         }
-        if ($this->isPassThrough($e)) {
-            return true;    // §4: pass_through ocolește reporterii ȘI renderele pachetului; Laravel decide singur
-        }
 
-        $suppress = ExceptionInspector::shouldNotReport($e);
+        // N-04: isPassThrough() și shouldNotReport() TREBUIE să fie ÎN try — o excepție din
+        // AttributeCache (cache stale, store picat, atribut invalid) ar înlocui excepția reală.
+        $suppress = false;
         $ran      = [];
 
         try {
+            if ($this->isPassThrough($e)) {
+                return true;    // §4: pass_through ocolește reporterii ȘI renderele pachetului; Laravel decide singur
+            }
+
+            $suppress = ExceptionInspector::shouldNotReport($e);
+
             if (! $suppress) {
                 $this->pushContext($e);
             }
@@ -103,9 +108,10 @@ final class ErrorManager implements ErrorManagerInterface
         }
 
         // AI Structured Logging — local environment only, never throws.
-        if (app()->environment('local')) {
+        // N-16: use origin() so JSONL logs the real class, not the wrapper. Skip for #[DontReport].
+        if (app()->environment('local') && ! $suppress) {
             try {
-                \Isaidgitmenow\LaravelErrors\Mcp\McpLogger::log($e);
+                \Isaidgitmenow\LaravelErrors\Mcp\McpLogger::log(ExceptionInspector::origin($e));
             } catch (Throwable) {
                 // Logging must never crash the application
             }
@@ -254,13 +260,18 @@ final class ErrorManager implements ErrorManagerInterface
         return [null, null];
     }
 
+    // N-14: Reuse HandlerSlots::shouldRenderJson() instead of inconsistent ajax()/wantsJson()
     private function shouldYieldToIgnition(?ContextDetectorInterface $detector, Request $request): bool
     {
         if (! $this->cfg('respect_debug_mode', true) || ! app()->hasDebugModeEnabled()) {
             return false;
         }
 
-        return ! $request->ajax() && ! $request->wantsJson() && ! $detector instanceof InteractiveContextDetector;
+        if ($detector instanceof InteractiveContextDetector) {
+            return false;
+        }
+
+        return ! app(HandlerSlots::class)->shouldRenderJson($request, new \RuntimeException());
     }
 
     private function pushContext(Throwable $e): void

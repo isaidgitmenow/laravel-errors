@@ -14,6 +14,7 @@ use Isaidgitmenow\LaravelErrors\Exceptions\AttributedHttpException;
 use Isaidgitmenow\LaravelErrors\Renderers\ValidationProblemRenderer;
 use Isaidgitmenow\LaravelErrors\Support\AttributeCache;
 use Isaidgitmenow\LaravelErrors\Support\AttributedExceptionMapper;
+use Isaidgitmenow\LaravelErrors\Support\CriticalLog;
 use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
 use Isaidgitmenow\LaravelErrors\Support\HandlerSlots;
 use Isaidgitmenow\LaravelErrors\Support\RateLimitKey;
@@ -77,12 +78,22 @@ final class ErrorHandler
         }
 
         // 4. Îmbogățirea liniei de log Laravel — LogReporter e scos din default încă din 2.0.
-        $exceptions->context(fn (Throwable $e) => [
-            'error_id'         => ErrorIdentity::for($e),
-            'error_code'       => ExceptionInspector::errorCode($e),
-            'original_message' => ExceptionInspector::origin($e)->getMessage(),   // wrapper-ul are mesajul public
-            'error_context'    => ExceptionInspector::sanitizedContext($e),
-        ]);
+        //    Handler::exceptionContext() NU protejează contextCallbacks: o excepție aici ar opri logarea
+        //    Laravel a ORICĂREI excepții. De aceea try/catch + CriticalLog aici, nu în apelanți.
+        $exceptions->context(function (Throwable $e): array {
+            try {
+                return [
+                    'error_id'         => ErrorIdentity::for($e),
+                    'error_code'       => ExceptionInspector::errorCode($e),
+                    'original_message' => ExceptionInspector::origin($e)->getMessage(),   // wrapper-ul are mesajul public
+                    'error_context'    => ExceptionInspector::sanitizedContext($e),
+                ];
+            } catch (Throwable $failure) {
+                CriticalLog::once('laravel-errors log context failed', $failure, ['for' => $e::class]);
+
+                return [];
+            }
+        });
 
         // 5. throttle() nativ — DOAR în producție: rulează în shouldntReport() și când se declanșează
         //    nu mai rulează NICIUN reporter (nici Debugbar/Xdebug). Fail-open garantat de Laravel (rescue).

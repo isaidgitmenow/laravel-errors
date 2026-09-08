@@ -24,4 +24,6 @@ interface ErrorManagerInterface
     public function addContext(string $detector, string $renderer): static;
 
     public function addReporter(string $reporter): static;
+
+    public function bypassConsoleExceptions(bool $on = true): void;
 }

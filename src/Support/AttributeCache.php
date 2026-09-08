@@ -19,7 +19,7 @@ use Isaidgitmenow\LaravelErrors\Exceptions\InvalidConfigurationException;
  */
 final class AttributeCache
 {
-    public const VERSION = '2.1.0';
+    public const VERSION = '2.2.0';
 
     /** @var array<class-string, array<string, mixed>>|null */
     private ?array $classes = null;

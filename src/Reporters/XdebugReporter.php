@@ -54,7 +54,7 @@ final class XdebugReporter implements ErrorReporterInterface, BypassesRateLimiti
             $this->config['sanitize'] ?? [],
         );
 
-        xdebug_notify(['LaravelErrors Context for ' . class_basename($e) => $sanitized]);
+        xdebug_notify(['LaravelErrors Context for ' . class_basename(ExceptionInspector::origin($e)) => $sanitized]);
 
         return true;
     }

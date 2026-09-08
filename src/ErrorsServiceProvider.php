@@ -39,6 +39,10 @@ class ErrorsServiceProvider extends PackageServiceProvider
                 MakeExceptionCommand::class,
                 MakeDddErrorCommand::class,
                 ErrorsMcpCommand::class,
+                CacheErrorsCommand::class,
+                ClearErrorsCacheCommand::class,
+                DoctorCommand::class,
+                ListErrorsCommand::class,
             );
     }
 
@@ -142,7 +146,7 @@ class ErrorsServiceProvider extends PackageServiceProvider
         $enum('expose_messages', $c['expose_messages'] ?? 'attributed', ['attributed', 'always', 'never']);
         $enum('livewire_mode', $c['livewire_mode'] ?? 'hook', ['hook', 'json']);
 
-        foreach (['json_formatter', 'livewire_handler', 'filament_handler'] as $key) {
+        foreach (['json_formatter', 'livewire_handler', 'filament_handler', 'metrics'] as $key) {
             CallableResolver::resolve($c[$key] ?? null, $key);   // aruncă dacă e class-string neinvokabil
         }
 

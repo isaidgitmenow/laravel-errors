@@ -64,7 +64,13 @@ final class HandlerSlots
     public function runRespond(Response $response, Throwable $e, Request $request): Response
     {
         // Răspunsurile construite de utilizator (HttpResponseException, ValidationException) nu se ating.
-        $ours = ! app(ErrorManagerInterface::class)->isPassThrough($e);
+        // Suntem după randare: o excepție aici ar înlocui răspunsul deja construit → default sigur + CriticalLog.
+        try {
+            $ours = ! app(ErrorManagerInterface::class)->isPassThrough($e);
+        } catch (Throwable $failure) {
+            CriticalLog::once('laravel-errors respond slot failed', $failure, ['for' => $e::class]);
+            $ours = false;
+        }
 
         if ($ours && $this->cfg('error_id.enabled', true)) {
             $response = $this->injectErrorId($response, $e);

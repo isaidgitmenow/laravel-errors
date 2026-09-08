@@ -11,9 +11,14 @@ final class AttributeScanner
 {
     public function __construct(private readonly AttributeReader $reader) {}
 
-    /** @return list<string> căi absolute existente; suportă glob (src/Domain/* /Exceptions) */
+    // @return list<string> căi absolute existente; suportă glob (src/Domain/star/Exceptions)
     public function resolvePaths(array $patterns): array
     {
+        // N-05: DDD domain path auto-detection at runtime — config/errors.php nu poate depinde de ordinea încărcării config('ddd.*').
+        if (function_exists('config') && ($ddd = config('ddd.domain_path')) !== null) {
+            $patterns[] = rtrim((string) $ddd, '/\\') . '/*/Exceptions';
+        }
+
         $paths = [];
         foreach ($patterns as $pattern) {
             foreach (glob($pattern, GLOB_ONLYDIR) ?: [] as $dir) {
@@ -45,7 +50,14 @@ final class AttributeScanner
                 continue;
             }
 
-            $data = $this->reader->read($class);
+            // N-12/P-05: Un atribut invalid pe O clasă nu trebuie să dezactiveze scanarea pentru TOATE.
+            // Îl înregistrăm pentru doctor și continuăm.
+            try {
+                $data = $this->reader->read($class);
+            } catch (\Throwable $failure) {
+                $this->failures[$class] = $failure->getMessage();
+                continue;
+            }
             if ($data !== []) {
                 $out[$class] = $data;
             }
@@ -53,6 +65,15 @@ final class AttributeScanner
         ksort($out);
 
         return $out;
+    }
+
+    /** @var array<class-string, string>  clase cu atribute invalide la ultima scanare — raportate de errors:cache/doctor */
+    private array $failures = [];
+
+    /** @return array<class-string, string> */
+    public function failures(): array
+    {
+        return $this->failures;
     }
 
     /** @return iterable<\SplFileInfo> */

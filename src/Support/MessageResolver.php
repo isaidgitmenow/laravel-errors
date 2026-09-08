@@ -26,7 +26,8 @@ final class MessageResolver
 
         // Un HttpExceptionInterface REAL (abort(503, 'Down'), chiar cu previous: PDOException) poartă un mesaj
         // scris deliberat pentru client. Wrapper-ul nostru intră tot aici — mesajul lui e deja public. Idempotent.
-        if ($e instanceof HttpExceptionInterface) {
+        // P-02: abort(404) are mesaj gol → fallback, nu string vid.
+        if ($e instanceof HttpExceptionInterface && $e->getMessage() !== '') {
             return $e->getMessage();
         }
 

@@ -53,7 +53,7 @@ final class DebugbarReporter implements ErrorReporterInterface, BypassesRateLimi
                 $this->config['sanitize'] ?? [],
             );
             $debugbar->addMessage(
-                '[' . class_basename($e) . '] Context: ' . json_encode($sanitized, JSON_PRETTY_PRINT),
+                '[' . class_basename(ExceptionInspector::origin($e)) . '] Context: ' . json_encode($sanitized, JSON_PRETTY_PRINT),
                 'error'
             );
         }
