@@ -223,7 +223,15 @@ final class ExceptionInspector
 
         foreach ($attrs['with_context'] ?? [] as $property) {
             if (property_exists($origin, $property)) {
-                $value = $origin->{$property};
+                try {
+                    $refProp = new \ReflectionProperty($origin, $property);
+                    if (! $refProp->isInitialized($origin)) {
+                        continue;
+                    }
+                    $value = $refProp->getValue($origin);
+                } catch (\Throwable) {
+                    continue;
+                }
                 $ctx[$property] = isset($masks[$property]) ? Masker::mask($value, $masks[$property]) : $value;
             }
         }
@@ -267,7 +275,15 @@ final class ExceptionInspector
         $masks = self::attributes($origin)['sensitive'] ?? [];
 
         if (property_exists($origin, $source)) {
-            $v = $origin->{$source};
+            try {
+                $refProp = new \ReflectionProperty($origin, $source);
+                if (! $refProp->isInitialized($origin)) {
+                    return '';
+                }
+                $v = $refProp->getValue($origin);
+            } catch (\Throwable) {
+                return '';
+            }
 
             return isset($masks[$source]) ? Masker::mask($v, $masks[$source]) : $v;
         }

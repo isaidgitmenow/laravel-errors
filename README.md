@@ -14,8 +14,8 @@ use Isaidgitmenow\LaravelErrors\Attributes\ReportTo;
 use Isaidgitmenow\LaravelErrors\Attributes\RateLimit;
 
 #[HttpCode(402)]
-#[ReportTo('slack', 'sentry')]
-#[RateLimit(maxExceptions: 5, perMinutes: 1)]
+#[ReportTo(['slack', 'sentry'])]
+#[RateLimit(max: 5, intervalInMinutes: 1)]
 class PaymentFailedException extends Exception
 {
     // That's it! No render(), no report() methods.
@@ -44,7 +44,7 @@ composer require isaidgitmenow/laravel-errors
 - **RFC 9457 Problem Details**: The API Renderer automatically formats errors according to the IETF RFC 9457 standard (Problem Details for HTTP APIs).
 - **ULID Error Identities**: Every error automatically generates a unique, sortable ULID (`ErrorIdentity`) that is injected into logs and the API response for exact tracing.
 - **Auto-Injection into Laravel Context**: Automatically forwards `#[WithContext]` data to downstream trackers like Sentry or Flare via Laravel 11's global `Context`.
-- **Deep Data Masking (`Masker`)**: Built-in redaction for sensitive keys using the `#[Sensitive]` attribute (supports `first_last`, `last4`, and `random` masking) before they hit logs or external trackers.
+- **Deep Data Masking (`Masker`)**: Built-in redaction for sensitive keys using the `#[Sensitive]` attribute (supports `first_last`, `last4`, `email`, `hash`, and `length` masking) before they hit logs or external trackers.
 - **Anti-Spam Rate Limiting**: Prevent cascading failures from exhausting your error tracker quotas using the `#[RateLimit]` attribute.
 - **Octane Compatible**: Automatically flushes the reflection cache and dynamic state after every request under Swoole / RoadRunner to prevent memory leaks.
 - **Dynamic Pass-Through**: Third-party packages can register exceptions to bypass the pipeline at runtime — no config edits required.

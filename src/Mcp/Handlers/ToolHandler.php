@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Isaidgitmenow\LaravelErrors\ErrorManager;
 use Isaidgitmenow\LaravelErrors\Mcp\McpLogReader;
 use Isaidgitmenow\LaravelErrors\Mcp\McpLogger;
+use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
 use ReflectionClass;
 use Throwable;
 
@@ -253,6 +254,8 @@ final class ToolHandler
             }
         }
 
+        usort($results, fn (array $a, array $b) => strcmp((string) $a['class'], (string) $b['class']));
+
         $total  = count($results);
         $paged  = array_slice($results, ($page - 1) * $perPage, $perPage);
 
@@ -332,11 +335,8 @@ final class ToolHandler
 
         // Temporarily lift the MCP bypass so report() and render() actually run.
         // We also track the original state so we can restore it.
-        $manager = app(\Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface::class);
-        $reflection = new ReflectionClass($manager);
-        $bypassProperty = $reflection->getProperty('bypassConsoleExceptions');
-        $bypassProperty->setAccessible(true);
-        $wasBypassed = $bypassProperty->getValue($manager);
+        $manager     = app(\Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface::class);
+        $wasBypassed = $manager->isBypassingConsoleExceptions();
 
         $manager->bypassConsoleExceptions(false);
 
@@ -426,7 +426,10 @@ final class ToolHandler
             return ['available' => false, 'data' => []];
         }
 
-        return ['available' => true, 'data' => Context::all()];
+        return [
+            'available' => true,
+            'data'      => DataSanitizer::sanitize(Context::all(), (array) config('errors.sanitize', [])),
+        ];
     }
 
     /**

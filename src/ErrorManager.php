@@ -245,6 +245,11 @@ final class ErrorManager implements ErrorManagerInterface
         $this->bypassConsoleExceptions = $on;
     }
 
+    public function isBypassingConsoleExceptions(): bool
+    {
+        return $this->bypassConsoleExceptions;
+    }
+
     // ------------------------------------------------------------------ internals
 
     /** @return array{0: ?ContextDetectorInterface, 1: ?class-string} */

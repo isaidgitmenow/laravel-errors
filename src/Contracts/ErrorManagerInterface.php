@@ -26,4 +26,5 @@ interface ErrorManagerInterface
     public function addReporter(string $reporter): static;
 
     public function bypassConsoleExceptions(bool $on = true): void;
+    public function isBypassingConsoleExceptions(): bool;
 }
