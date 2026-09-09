@@ -29,7 +29,6 @@ final class McpServer
     private const PROTOCOL_VERSION = '2024-11-05';
     private const SERVER_NAME      = 'laravel-errors-mcp';
     private const SERVER_VERSION   = '1.0.0';
-    private const READ_BUFFER      = 1048576; // 1 MB
 
     // JSON-RPC 2.0 error codes
     private const ERR_PARSE_ERROR      = -32700;
