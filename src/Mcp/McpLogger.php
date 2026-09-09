@@ -36,12 +36,17 @@ final class McpLogger
         static::ensureDirectory($path);
         static::maybeRotate($path);
 
-        $line = json_encode(static::buildEntry($e), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+        $json = json_encode(static::buildEntry($e), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            return;
+        }
+        $line = $json . "\n";
 
         set_error_handler(static fn () => true); // suppress E_WARNING
         try {
             file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
-            @chmod($path, 0666);
+            $mode = config('errors.mcp.log_file_mode') ?? 0664;
+            @chmod($path, is_int($mode) ? $mode : 0664);
         } finally {
             restore_error_handler();
         }

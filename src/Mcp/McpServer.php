@@ -70,7 +70,7 @@ final class McpServer
             // Buffer 1: wrap the blocking STDIN read so any output during the wait
             // (e.g. from Laravel's own boot-time echo) is captured.
             ob_start();
-            $line   = stream_get_line($this->inputStream, self::READ_BUFFER, "\n");
+            $line   = fgets($this->inputStream);
             $leaked = ob_get_clean();
             if (is_string($leaked) && $leaked !== '') {
                 fwrite(STDERR, "[mcp:leaked-output] " . $leaked . "\n");

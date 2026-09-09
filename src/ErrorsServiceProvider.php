@@ -34,7 +34,7 @@ class ErrorsServiceProvider extends PackageServiceProvider
             ->name('laravel-errors')
             ->hasConfigFile('errors')
             ->hasViews()
-            ->hasTranslations()
+            ->hasMigration('create_error_audit_log_table')
             ->hasCommands(
                 MakeExceptionCommand::class,
                 MakeDddErrorCommand::class,
@@ -78,6 +78,18 @@ class ErrorsServiceProvider extends PackageServiceProvider
         ));
         $this->app->singleton(HandlerSlots::class, fn ($app) => new HandlerSlots($app[Repository::class], $app[Dispatcher::class]));
         $this->app->singleton(AttributedExceptionMapper::class, fn ($app) => new AttributedExceptionMapper($app[Repository::class]));
+
+        $this->app->singleton(\Isaidgitmenow\LaravelErrors\Reporters\AuditReporter::class, function ($app) use ($config) {
+            $sinks = [];
+            foreach ($config($app)['audit']['sinks'] ?? [] as $sinkName) {
+                if ($sinkName === 'database') {
+                    $sinks[] = $app->make(\Isaidgitmenow\LaravelErrors\Audit\DatabaseAuditSink::class);
+                } elseif ($sinkName === 'log_channel') {
+                    $sinks[] = $app->make(\Isaidgitmenow\LaravelErrors\Audit\LogChannelAuditSink::class);
+                }
+            }
+            return new \Isaidgitmenow\LaravelErrors\Reporters\AuditReporter($sinks);
+        });
 
         // bind(), nu singleton(): se re-rezolvă la fiecare utilizare, deci config-ul e citit proaspăt (F-21) fără Repository.
         foreach ([

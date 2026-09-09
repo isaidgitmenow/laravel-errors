@@ -28,6 +28,10 @@ final class McpLogReader
      */
     public function tail(int $limit = 10): array
     {
+        if ($limit <= 0) {
+            return [];
+        }
+
         if (! file_exists($this->logPath) || ! is_readable($this->logPath)) {
             return [];
         }

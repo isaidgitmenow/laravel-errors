@@ -15,7 +15,10 @@ final readonly class AuditRecord
         public string $logLevel,
         public string $category,
         public string $retention,
+        public \DateTimeInterface $retainUntil,
         public array $context,
+        public ?string $userId = null,
+        public ?string $requestId = null,
         public ?\DateTimeImmutable $occurredAt = null,
     ) {}
 
@@ -30,8 +33,11 @@ final readonly class AuditRecord
             'log_level'       => $this->logLevel,
             'category'        => $this->category,
             'retention'       => $this->retention,
+            'retain_until'    => $this->retainUntil->format('Y-m-d H:i:s'),
             'context'         => $this->context,
-            'occurred_at'     => ($this->occurredAt ?? new \DateTimeImmutable())->format(\DateTimeInterface::RFC3339_EXTENDED),
+            'user_id'         => $this->userId,
+            'request_id'      => $this->requestId,
+            'occurred_at'     => ($this->occurredAt ?? new \DateTimeImmutable())->format('Y-m-d H:i:s'),
         ];
     }
 }

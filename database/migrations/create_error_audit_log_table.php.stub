@@ -1,0 +1,35 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $table = config('errors.audit.table', 'error_audit_log');
+
+        Schema::create($table, function (Blueprint $table) {
+            $table->id();
+            $table->string('error_id')->index();
+            $table->string('exception_class');
+            $table->text('message');
+            $table->unsignedSmallInteger('http_status');
+            $table->string('error_code')->nullable()->index();
+            $table->string('log_level');
+            $table->string('category')->index();
+            $table->dateTime('retain_until')->index();
+            $table->json('context');
+            $table->string('user_id')->nullable()->index();
+            $table->string('request_id')->nullable()->index();
+            $table->dateTime('occurred_at')->index();
+        });
+    }
+
+    public function down(): void
+    {
+        $table = config('errors.audit.table', 'error_audit_log');
+        Schema::dropIfExists($table);
+    }
+};

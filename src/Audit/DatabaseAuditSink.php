@@ -11,6 +11,9 @@ final class DatabaseAuditSink implements AuditSink
 {
     public function write(AuditRecord $record): void
     {
-        DB::table('error_audit_log')->insert($record->toArray());
+        $data = $record->toArray();
+        $data['context'] = json_encode($data['context'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        
+        DB::table('error_audit_log')->insert($data);
     }
 }

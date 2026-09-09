@@ -42,7 +42,10 @@ final class AuditReporter implements ErrorReporterInterface, BypassesRateLimitin
             logLevel:       ExceptionInspector::logLevel($e),
             category:       $audit['category'],
             retention:      $audit['retention'],
+            retainUntil:    \Illuminate\Support\Carbon::now()->add($audit['retention'])->toDateTimeImmutable(),
             context:        ExceptionInspector::sanitizedContext($e),
+            userId:         auth()->check() ? (string) auth()->id() : null,
+            requestId:      request()->header('x-request-id') ?? (request()->route() ? request()->fingerprint() : null),
         );
 
         foreach ($this->sinks as $sink) {
