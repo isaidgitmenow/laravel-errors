@@ -113,6 +113,9 @@ describe('LivewireRenderer', function () {
 
 describe('WebRenderer', function () {
     it('returns HTML for generic requests', function () {
+        // Register the package view namespace so view()->exists('laravel-errors::error') works
+        view()->addNamespace('laravel-errors', realpath(__DIR__ . '/../../resources/views'));
+
         $renderer = new WebRenderer();
         $request = Request::create('/', 'GET');
         $response = $renderer->render(new \RuntimeException('Web fail'), $request);

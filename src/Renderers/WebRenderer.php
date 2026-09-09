@@ -47,6 +47,7 @@ final class WebRenderer implements ExceptionRendererInterface
         }
 
         // 3. Package view
+        /** @phpstan-ignore method.impossibleType (Larastan cannot resolve package-namespaced views statically) */
         if (view()->exists('laravel-errors::error')) {
             return response()->view('laravel-errors::error', $data, $status);
         }
