@@ -7,7 +7,7 @@ namespace Isaidgitmenow\LaravelErrors\Renderers;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
-use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
+use Isaidgitmenow\LaravelErrors\Support\ErrorPayload;
 use Isaidgitmenow\LaravelErrors\Support\MessageResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -28,11 +28,7 @@ final class WebRenderer implements ExceptionRendererInterface
         $status  = ExceptionInspector::httpCode($e);
         $message = MessageResolver::public($e, $status, $this->config);
 
-        $data = [
-            'status'   => $status,
-            'message'  => $message,
-            'code'     => ExceptionInspector::errorCode($e) ?? 'HTTP_' . $status,
-            'error_id' => ErrorIdentity::for($e),
+        $data = ErrorPayload::page($e, $status, $message) + [
             'context'  => app()->hasDebugModeEnabled() ? ExceptionInspector::sanitizedContext($e) : [],
         ];
 

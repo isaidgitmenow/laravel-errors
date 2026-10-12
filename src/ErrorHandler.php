@@ -127,16 +127,6 @@ final class ErrorHandler
 
     private static function derivedLevel(array $data): ?string
     {
-        if (! isset($data['http_code'])) {
-            return null;
-        }
-        $status = (int) $data['http_code'];
-
-        return match (true) {
-            $status === 429 => 'notice',
-            $status === 503 => 'critical',
-            $status < 500   => 'warning',
-            default         => 'error',
-        };
+        return isset($data['http_code']) ? ExceptionInspector::levelForStatus((int) $data['http_code']) : null;
     }
 }

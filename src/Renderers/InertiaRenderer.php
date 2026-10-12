@@ -8,7 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
-use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
+use Isaidgitmenow\LaravelErrors\Support\ErrorPayload;
 use Isaidgitmenow\LaravelErrors\Support\MessageResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -32,12 +32,7 @@ final class InertiaRenderer implements ExceptionRendererInterface
         $mode      = $this->config['inertia_mode'] ?? 'page';
         $component = $this->config['inertia_error_component'] ?? 'ErrorPage';
 
-        $payload = [
-            'status'   => $status,
-            'message'  => $message,
-            'code'     => ExceptionInspector::errorCode($e) ?? 'HTTP_' . $status,
-            'error_id' => ErrorIdentity::for($e),
-        ];
+        $payload = ErrorPayload::page($e, $status, $message);
 
         return match ($mode) {
             'page', 'redirect' => \Inertia\Inertia::render($component, $payload)

@@ -43,8 +43,8 @@ final class McpLogReader
         $relevant = array_slice(array_filter($lines, static fn (string $l) => trim($l) !== ''), -$limit);
 
         return array_values(array_filter(
-            array_map(static fn (string $line) => json_decode($line, associative: true) ?? null, $relevant),
-            static fn ($entry) => $entry !== null,
+            array_map(static fn (string $line) => json_decode($line, associative: true), $relevant),
+            static fn ($entry) => is_array($entry),
         ));
     }
 
@@ -90,7 +90,7 @@ final class McpLogReader
                 }
 
                 $entry = json_decode($trimmed, associative: true);
-                if ($entry !== null) {
+                if (is_array($entry)) {
                     $results[] = $entry;
                 }
 

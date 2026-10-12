@@ -16,7 +16,11 @@ final class AttributeScanner
     {
         // N-05: DDD domain path auto-detection at runtime — config/errors.php nu poate depinde de ordinea încărcării config('ddd.*').
         if (function_exists('config') && ($ddd = config('ddd.domain_path')) !== null) {
-            $patterns[] = rtrim((string) $ddd, '/\\') . '/*/Exceptions';
+            $ddd = rtrim((string) $ddd, '/\\');
+            if (! self::isAbsolute($ddd) && function_exists('base_path')) {
+                $ddd = base_path($ddd);   // relativ la proiect, nu la CWD-ul procesului
+            }
+            $patterns[] = $ddd . '/*/Exceptions';
         }
 
         $paths = [];
@@ -141,5 +145,11 @@ final class AttributeScanner
         }
 
         return false;
+    }
+
+    /** Cale absolută pe Unix (`/x`), Windows (`C:\x`, `C:/x`) sau UNC (`\\srv`). */
+    private static function isAbsolute(string $path): bool
+    {
+        return $path !== '' && ($path[0] === '/' || $path[0] === '\\' || (bool) preg_match('~^[A-Za-z]:[\\\\/]~', $path));
     }
 }

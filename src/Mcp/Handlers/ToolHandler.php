@@ -7,9 +7,10 @@ namespace Isaidgitmenow\LaravelErrors\Mcp\Handlers;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
-use Isaidgitmenow\LaravelErrors\ErrorManager;
+use Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface;
 use Isaidgitmenow\LaravelErrors\Mcp\McpLogReader;
 use Isaidgitmenow\LaravelErrors\Mcp\McpLogger;
+use Isaidgitmenow\LaravelErrors\Mcp\ReporterMock;
 use Isaidgitmenow\LaravelErrors\Support\DataSanitizer;
 use ReflectionClass;
 use Throwable;
@@ -221,14 +222,19 @@ final class ToolHandler
                     continue;
                 }
 
-                $relative  = str_replace($basePath . DIRECTORY_SEPARATOR, '', $realPath);
-
-                // For DDD paths, we only care about files in an 'Exceptions' directory
-                if ($basePath === $domainFullPath && !str_contains($relative, DIRECTORY_SEPARATOR . 'Exceptions' . DIRECTORY_SEPARATOR)) {
+                // Windows: getRealPath() normalizes separators/case, so a str_replace on the raw
+                // base path silently fails and yields garbage FQCNs. Compare normalized paths instead.
+                $relative = self::relativePath($realPath, $basePath);
+                if ($relative === null) {
                     continue;
                 }
 
-                $classPath = str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relative);
+                // For DDD paths, we only care about files in an 'Exceptions' directory
+                if ($basePath === $domainFullPath && ! str_contains('/' . $relative, '/Exceptions/')) {
+                    continue;
+                }
+
+                $classPath = str_replace(['/', '.php'], ['\\', ''], $relative);
                 $fqcn      = $baseNamespace . $classPath;
 
                 if (! class_exists($fqcn)) {
@@ -244,7 +250,7 @@ final class ToolHandler
 
                     $results[] = [
                         'class'      => $fqcn,
-                        'file'       => str_replace(base_path() . DIRECTORY_SEPARATOR, '', $file->getRealPath()),
+                        'file'       => self::relativePath($realPath, base_path()) ?? $realPath,
                         'attributes' => $attrs,
                         'throwable'  => $ref->implementsInterface(Throwable::class) || $ref->isSubclassOf(\Exception::class),
                     ];
@@ -311,9 +317,8 @@ final class ToolHandler
         }
 
         // Security: only allow Throwable subclasses
-        if (! class_exists($class) || ! is_subclass_of($class, Throwable::class)) {
-            throw new \InvalidArgumentException("simulate_error: [{$class}] is not a valid Throwable subclass.");
-        }
+        $class = self::resolveThrowableClass($class)
+            ?? throw new \InvalidArgumentException("simulate_error: [{$class}] is not a valid Throwable subclass.");
 
         // Mock the Request object from context
         $url     = (string) ($context['url'] ?? 'http://localhost/simulate');
@@ -335,7 +340,7 @@ final class ToolHandler
 
         // Temporarily lift the MCP bypass so report() and render() actually run.
         // We also track the original state so we can restore it.
-        $manager     = app(\Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface::class);
+        $manager     = app(ErrorManagerInterface::class);
         $wasBypassed = $manager->isBypassingConsoleExceptions();
 
         $manager->bypassConsoleExceptions(false);
@@ -358,7 +363,8 @@ final class ToolHandler
                 ? $ref->newInstanceArgs($constructorArgs)
                 : $ref->newInstance();
 
-            $manager->report($exception);
+            // report() returns false only when reporting was suppressed (#[DontReport]).
+            $reported = $manager->report($exception);
 
             $response = $manager->render($exception, $request);
 
@@ -366,7 +372,7 @@ final class ToolHandler
                 'success'       => true,
                 'exception'     => $class,
                 'response_code' => $response?->getStatusCode(),
-                'reported'      => true,
+                'reported'      => $reported,
             ];
         } catch (Throwable $e) {
             $result = [
@@ -438,25 +444,52 @@ final class ToolHandler
      */
     private function mockReporters(array $args): array
     {
-        $enable   = (bool) ($args['enable'] ?? true);
-        $lockPath = storage_path('framework/mcp_mock_reporters.lock');
+        $enable = (bool) ($args['enable'] ?? true);
 
-        if ($enable) {
-            @mkdir(dirname($lockPath), 0775, recursive: true);
-            // Bug 4 fix: check the return value so we never silently lie about mocking being active.
-            $written = @file_put_contents($lockPath, date('c'));
-            if ($written === false) {
-                throw new \RuntimeException("mock_reporters: failed to write lock file at {$lockPath}. Check directory permissions.");
-            }
-            return ['mocked' => true, 'lock_file' => $lockPath];
+        return $enable
+            ? ['mocked' => true, 'lock_file' => ReporterMock::enable()]
+            : ['mocked' => false, 'lock_file' => ReporterMock::disable()];
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /** Path of $path relative to $base, with forward slashes; null when $path is outside $base. */
+    private static function relativePath(string $path, string $base): ?string
+    {
+        $normalize = static fn (string $p): string => rtrim(str_replace('\\', '/', $p), '/');
+
+        $path = $normalize($path);
+        $base = $normalize(realpath($base) ?: $base) . '/';
+
+        if (! str_starts_with(strtolower($path), strtolower($base))) {
+            return null;
         }
 
-        if (file_exists($lockPath)) {
-            if (!@unlink($lockPath)) {
-                throw new \RuntimeException("mock_reporters: failed to remove lock file at {$lockPath}. Check permissions.");
+        return substr($path, strlen($base));
+    }
+
+    /**
+     * Resolve a (possibly short) class name against errors.mcp.simulate_namespaces.
+     *
+     * @return class-string<Throwable>|null
+     */
+    private static function resolveThrowableClass(string $class): ?string
+    {
+        $class      = ltrim($class, '\\');
+        $namespaces = array_unique(['', ...array_map(
+            static fn (mixed $ns): string => ($ns = trim((string) $ns, '\\')) === '' ? '' : $ns . '\\',
+            (array) config('errors.mcp.simulate_namespaces', []),
+        )]);
+
+        foreach ($namespaces as $namespace) {
+            $candidate = $namespace . $class;
+            if (class_exists($candidate) && is_subclass_of($candidate, Throwable::class)) {
+                return $candidate;
             }
         }
 
-        return ['mocked' => false, 'lock_file' => $lockPath];
+        return null;
     }
 }

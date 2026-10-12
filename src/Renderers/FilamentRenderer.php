@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Isaidgitmenow\LaravelErrors\Contracts\ExceptionRendererInterface;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
 use Isaidgitmenow\LaravelErrors\Support\CallableResolver;
-use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
+use Isaidgitmenow\LaravelErrors\Support\ErrorPayload;
 use Isaidgitmenow\LaravelErrors\Support\MessageResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -46,11 +46,6 @@ final class FilamentRenderer implements ExceptionRendererInterface
             return null;
         }
 
-        return response()->json([
-            'message'  => $message,
-            'errors'   => [],
-            'code'     => ExceptionInspector::errorCode($e) ?? 'HTTP_' . $status,
-            'error_id' => ErrorIdentity::for($e),
-        ], $status);
+        return response()->json(ErrorPayload::legacyJson($e, $status, $message), $status);
     }
 }

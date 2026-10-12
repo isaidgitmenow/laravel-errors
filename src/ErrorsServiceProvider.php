@@ -35,6 +35,7 @@ class ErrorsServiceProvider extends PackageServiceProvider
             ->hasConfigFile('errors')
             ->hasViews()
             ->hasMigration('create_error_audit_log_table')
+            ->hasMigration('add_retention_to_error_audit_log_table')
             ->hasCommands(
                 MakeExceptionCommand::class,
                 MakeDddErrorCommand::class,
@@ -69,6 +70,16 @@ class ErrorsServiceProvider extends PackageServiceProvider
         ));
         $this->app->alias(ErrorManagerInterface::class, ErrorManager::class);
 
+        // errors.audit.enabled: AuditReporter intră în pipeline fără a fi adăugat manual în errors.reporters.
+        $this->app->extend(ErrorManagerInterface::class, function (ErrorManagerInterface $manager, $app) use ($config) {
+            $c = $config($app);
+            if (($c['audit']['enabled'] ?? false) && ! in_array(Reporters\AuditReporter::class, (array) ($c['reporters'] ?? []), true)) {
+                $manager->addReporter(Reporters\AuditReporter::class);
+            }
+
+            return $manager;
+        });
+
         $this->app->singleton(AttributeCache::class, fn ($app) => new AttributeCache(
             app:     $app,
             reader:  $app->make(Support\AttributeReader::class),
@@ -79,17 +90,9 @@ class ErrorsServiceProvider extends PackageServiceProvider
         $this->app->singleton(HandlerSlots::class, fn ($app) => new HandlerSlots($app[Repository::class], $app[Dispatcher::class]));
         $this->app->singleton(AttributedExceptionMapper::class, fn ($app) => new AttributedExceptionMapper($app[Repository::class]));
 
-        $this->app->singleton(\Isaidgitmenow\LaravelErrors\Reporters\AuditReporter::class, function ($app) use ($config) {
-            $sinks = [];
-            foreach ($config($app)['audit']['sinks'] ?? [] as $sinkName) {
-                if ($sinkName === 'database') {
-                    $sinks[] = $app->make(\Isaidgitmenow\LaravelErrors\Audit\DatabaseAuditSink::class);
-                } elseif ($sinkName === 'log_channel') {
-                    $sinks[] = $app->make(\Isaidgitmenow\LaravelErrors\Audit\LogChannelAuditSink::class);
-                }
-            }
-            return new \Isaidgitmenow\LaravelErrors\Reporters\AuditReporter($sinks);
-        });
+        $this->app->singleton(Reporters\AuditReporter::class, fn ($app) => new Reporters\AuditReporter(
+            $app->make(Audit\AuditSinkFactory::class)->make((array) ($config($app)['audit'] ?? [])),
+        ));
 
         // bind(), nu singleton(): se re-rezolvă la fiecare utilizare, deci config-ul e citit proaspăt (F-21) fără Repository.
         foreach ([

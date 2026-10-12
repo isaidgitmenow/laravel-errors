@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Isaidgitmenow\LaravelErrors\Mcp\Commands;
 
 use Illuminate\Console\Command;
-use Isaidgitmenow\LaravelErrors\ErrorManager;
 use Isaidgitmenow\LaravelErrors\Mcp\Handlers\PromptHandler;
 use Isaidgitmenow\LaravelErrors\Mcp\Handlers\ResourceHandler;
 use Isaidgitmenow\LaravelErrors\Mcp\Handlers\ToolHandler;
 use Isaidgitmenow\LaravelErrors\Mcp\McpServer;
+use Isaidgitmenow\LaravelErrors\Mcp\ReporterMock;
 
 /**
  * Artisan command that starts the native MCP STDIO server.
@@ -46,7 +46,7 @@ class ErrorsMcpCommand extends Command
         // during AI-driven simulations. Register a shutdown function so the file
         // is always removed when this process ends, even on fatal errors or SIGTERM.
         // (SIGKILL is inherently unhandleable and intentionally excluded.)
-        $lockPath = storage_path('framework/mcp_mock_reporters.lock');
+        $lockPath = ReporterMock::path();
         register_shutdown_function(static function () use ($lockPath): void {
             @unlink($lockPath);
         });

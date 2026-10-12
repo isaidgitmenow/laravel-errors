@@ -75,7 +75,7 @@ final class PromptHandler
      */
     private function refactorToSolid(array $args): array
     {
-        $code = trim($args['code'] ?? '');
+        $code = self::stringArg($args, 'code');
 
         if ($code === '') {
             throw new \InvalidArgumentException('refactor_to_solid: "code" argument is required.');
@@ -114,8 +114,8 @@ final class PromptHandler
      */
     private function generateDddError(array $args): array
     {
-        $domain    = trim($args['domain'] ?? '');
-        $className = trim($args['class_name'] ?? '');
+        $domain    = self::stringArg($args, 'domain');
+        $className = self::stringArg($args, 'class_name');
 
         if ($domain === '' || $className === '') {
             throw new \InvalidArgumentException('generate_ddd_error: "domain" and "class_name" arguments are required.');
@@ -141,5 +141,13 @@ final class PromptHandler
                 ],
             ],
         ];
+    }
+
+    /** Argumentele vin din JSON netipizat: un non-string ar produce TypeError în trim() (strict_types). */
+    private static function stringArg(array $args, string $key): string
+    {
+        $value = $args[$key] ?? '';
+
+        return is_string($value) ? trim($value) : '';
     }
 }

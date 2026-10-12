@@ -61,16 +61,7 @@ abstract class AttributedHttpException extends \RuntimeException implements Http
     /** @return class-string<self> */
     public static function classForLevel(string $psrLevel): string
     {
-        return match ($psrLevel) {
-            'debug'     => DebugAttributedHttpException::class,
-            'info'      => InfoAttributedHttpException::class,
-            'notice'    => NoticeAttributedHttpException::class,
-            'warning'   => WarningAttributedHttpException::class,
-            'critical'  => CriticalAttributedHttpException::class,
-            'alert'     => AlertAttributedHttpException::class,
-            'emergency' => EmergencyAttributedHttpException::class,
-            default     => ErrorAttributedHttpException::class,
-        };
+        return self::levelMap()[$psrLevel] ?? ErrorAttributedHttpException::class;
     }
 
     /** @return array<string, class-string<self>>  PSR-3 → clasă, pentru înregistrarea level() */

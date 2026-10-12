@@ -242,6 +242,15 @@ final class McpServer
             ]);
         } catch (\InvalidArgumentException $e) {
             $this->emitError($id, self::ERR_INVALID_PARAMS, $e->getMessage());
+        } catch (Throwable $e) {
+            // MCP: eșecurile de execuție ale unui tool sunt un REZULTAT cu isError, nu o eroare de protocol —
+            // astfel modelul vede mesajul și se poate corecta.
+            $this->emitResult($id, [
+                'content' => [
+                    ['type' => 'text', 'text' => $e::class . ': ' . $e->getMessage()],
+                ],
+                'isError' => true,
+            ]);
         } finally {
             // Always reset to unlimited so STDIN blocking reads are never cut short
             // between tool calls in this long-running daemon process.
@@ -339,6 +348,12 @@ final class McpServer
      */
     private function emitError(mixed $id, int $code, string $message): void
     {
+        // JSON-RPC 2.0 §4.1: notificările nu primesc NICIUN răspuns. Excepție: parse error / invalid request,
+        // unde id-ul nu a putut fi determinat și specificația cere răspuns cu id null.
+        if ($id === null && ! in_array($code, [self::ERR_PARSE_ERROR, self::ERR_INVALID_REQUEST], true)) {
+            return;
+        }
+
         $this->emit([
             'jsonrpc' => '2.0',
             'id'      => $id,

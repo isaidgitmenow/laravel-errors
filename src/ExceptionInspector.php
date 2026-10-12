@@ -123,17 +123,21 @@ final class ExceptionInspector
         }
 
         if (isset($attrs['http_code'])) {
-            $status = (int) $attrs['http_code'];
-
-            return match (true) {
-                $status === 429 => 'notice',
-                $status === 503 => 'critical',
-                $status < 500   => 'warning',
-                default         => 'error',
-            };
+            return self::levelForStatus((int) $attrs['http_code']);
         }
 
         return 'error';
+    }
+
+    /** Nivelul PSR-3 derivat dintr-un status HTTP — sursă unică (ExceptionInspector + ErrorHandler). */
+    public static function levelForStatus(int $status): string
+    {
+        return match (true) {
+            $status === 429 => 'notice',
+            $status === 503 => 'critical',
+            $status < 500   => 'warning',
+            default         => 'error',
+        };
     }
 
     public static function retryAfter(Throwable $e): ?int
@@ -222,16 +226,9 @@ final class ExceptionInspector
         $ctx    = [];
 
         foreach ($attrs['with_context'] ?? [] as $property) {
-            if (property_exists($origin, $property)) {
-                try {
-                    $refProp = new \ReflectionProperty($origin, $property);
-                    if (! $refProp->isInitialized($origin)) {
-                        continue;
-                    }
-                    $value = $refProp->getValue($origin);
-                } catch (\Throwable) {
-                    continue;
-                }
+            $found = false;
+            $value = self::publicPropertyValue($origin, $property, $found);
+            if ($found) {
                 $ctx[$property] = isset($masks[$property]) ? Masker::mask($value, $masks[$property]) : $value;
             }
         }
@@ -275,13 +272,9 @@ final class ExceptionInspector
         $masks = self::attributes($origin)['sensitive'] ?? [];
 
         if (property_exists($origin, $source)) {
-            try {
-                $refProp = new \ReflectionProperty($origin, $source);
-                if (! $refProp->isInitialized($origin)) {
-                    return '';
-                }
-                $v = $refProp->getValue($origin);
-            } catch (\Throwable) {
+            $found = false;
+            $v     = self::publicPropertyValue($origin, $source, $found);
+            if (! $found) {
                 return '';
             }
 
@@ -293,5 +286,28 @@ final class ExceptionInspector
         }
 
         return '';
+    }
+
+    /**
+     * Citește DOAR proprietăți publice și inițializate. #[Sensitive] e aplicat de AttributeReader
+     * numai pe proprietăți publice — citirea celor private/protected ar scurge valori nemascate.
+     */
+    private static function publicPropertyValue(object $origin, string $property, bool &$found): mixed
+    {
+        $found = false;
+
+        try {
+            $refProp = new \ReflectionProperty($origin, $property);
+            if (! $refProp->isPublic() || $refProp->isStatic() || ! $refProp->isInitialized($origin)) {
+                return null;
+            }
+            $value = $refProp->getValue($origin);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $found = true;
+
+        return $value;
     }
 }

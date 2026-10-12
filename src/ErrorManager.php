@@ -303,7 +303,7 @@ final class ErrorManager implements ErrorManagerInterface
     private function reporters(): array
     {
         // F-22a: NU se cache-uiește pe instanță — singleton-ul trăiește cât procesul MCP, iar lock-ul se schimbă în același proces.
-        if (app()->environment('local') && file_exists(storage_path('framework/mcp_mock_reporters.lock'))) {
+        if (\Isaidgitmenow\LaravelErrors\Mcp\ReporterMock::isActive()) {
             return [];
         }
 

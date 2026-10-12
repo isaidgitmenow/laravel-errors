@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace Isaidgitmenow\LaravelErrors\Integrations\Sentry;
 
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
+use Isaidgitmenow\LaravelErrors\Support\CriticalLog;
 use Isaidgitmenow\LaravelErrors\Support\ErrorIdentity;
 
 /**
@@ -22,6 +23,18 @@ final class AttributesEventProcessor
             return $event;
         }
 
+        try {
+            $this->decorate($event, $e);
+        } catch (\Throwable $failure) {
+            // Un event processor care aruncă ar pierde evenimentul Sentry — trimitem evenimentul nedecorat.
+            CriticalLog::once('laravel-errors sentry event processor failed', $failure, ['for' => $e::class]);
+        }
+
+        return $event;
+    }
+
+    private function decorate(\Sentry\Event $event, \Throwable $e): void
+    {
         $origin = ExceptionInspector::origin($e);       // după mapare, $e e wrapper-ul
 
         $event->setTag('error_id', ErrorIdentity::for($e));
@@ -39,8 +52,6 @@ final class AttributesEventProcessor
         if (isset($attrs['log_as']) || isset($attrs['http_code'])) {
             $event->setLevel(self::severity(ExceptionInspector::logLevel($e)));
         }
-
-        return $event;
     }
 
     private static function severity(string $psr): \Sentry\Severity
