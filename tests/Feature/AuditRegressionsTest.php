@@ -12,7 +12,6 @@ use Isaidgitmenow\LaravelErrors\Exceptions\AttributedHttpException;
 use Isaidgitmenow\LaravelErrors\Exceptions\ErrorAttributedHttpException;
 use Isaidgitmenow\LaravelErrors\Exceptions\InvalidConfigurationException;
 use Isaidgitmenow\LaravelErrors\ExceptionInspector;
-use Isaidgitmenow\LaravelErrors\Mcp\Handlers\PromptHandler;
 use Isaidgitmenow\LaravelErrors\Reporters\AuditReporter;
 use Isaidgitmenow\LaravelErrors\Support\ErrorPayload;
 
@@ -90,8 +89,4 @@ describe('Audit regressions', function () {
 
         expect($reporters)->toContain(AuditReporter::class);
     });
-
-    it('rejects non-string prompt arguments without a TypeError', function () {
-        (new PromptHandler())->get('refactor_to_solid', ['code' => ['not', 'a', 'string']]);
-    })->throws(InvalidArgumentException::class);
 });

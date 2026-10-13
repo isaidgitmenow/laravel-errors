@@ -36,9 +36,6 @@ final class ErrorManager implements ErrorManagerInterface
     /** @var array<class-string, true>  dedupe — F-18 */
     private array $dynamicPassThrough = [];
 
-    /** Stare pe instanță (§10.2): singleton-ul e re-creat per worker Octane; nu mai avem statice de golit. */
-    private bool $bypassConsoleExceptions = false;
-
     /** @param array<string, mixed>|Repository $config  union pentru testele care fac `new ErrorManager(config: [...])` (F-21) */
     public function __construct(
         private readonly array|Repository $config = [],
@@ -49,10 +46,6 @@ final class ErrorManager implements ErrorManagerInterface
 
     public function report(Throwable $e): bool
     {
-        if ($this->bypassConsoleExceptions) {
-            return true;    // procesul MCP: nu rulăm nimic, dar Laravel poate loga în fișier (nu atinge STDOUT)
-        }
-
         // N-04: isPassThrough() și shouldNotReport() TREBUIE să fie ÎN try — o excepție din
         // AttributeCache (cache stale, store picat, atribut invalid) ar înlocui excepția reală.
         $suppress = false;
@@ -107,16 +100,6 @@ final class ErrorManager implements ErrorManagerInterface
             CriticalLog::once('laravel-errors report pipeline failed', $failure, ['for' => $e::class]);
         }
 
-        // AI Structured Logging — local environment only, never throws.
-        // N-16: use origin() so JSONL logs the real class, not the wrapper. Skip for #[DontReport].
-        if (app()->environment('local') && ! $suppress) {
-            try {
-                \Isaidgitmenow\LaravelErrors\Mcp\McpLogger::log(ExceptionInspector::origin($e));
-            } catch (Throwable) {
-                // Logging must never crash the application
-            }
-        }
-
         // #[DontReport] → false: oprim și logarea Laravel și callback-urile următoare (Sentry) — asta e intenția.
         // Orice altceva → true: Laravel loghează O DATĂ, cu level() + context() din ErrorHandler.
         return ! $suppress;
@@ -126,10 +109,6 @@ final class ErrorManager implements ErrorManagerInterface
 
     public function render(Throwable $e, Request $request): ?Response
     {
-        if ($this->bypassConsoleExceptions) {
-            return null;
-        }
-
         try {
             if ($this->isPassThrough($e)) {
                 return null;
@@ -215,17 +194,26 @@ final class ErrorManager implements ErrorManagerInterface
         return false;
     }
 
+    /** @param class-string<Throwable> $exceptionClass */
     public function addPassThrough(string $exceptionClass): void
     {
         $this->dynamicPassThrough[$exceptionClass] = true;
     }
 
-    /** Compat: API static vechi → instanță. */
+    /**
+     * Compat: API static vechi → instanță.
+     *
+     * @param class-string<Throwable> $exceptionClass
+     */
     public static function passThrough(string $exceptionClass): void
     {
         app(ErrorManagerInterface::class)->addPassThrough($exceptionClass);
     }
 
+    /**
+     * @param class-string<ContextDetectorInterface>   $detector
+     * @param class-string<ExceptionRendererInterface> $renderer
+     */
     public function addContext(string $detector, string $renderer): static
     {
         $this->customContexts[$detector] = $renderer;
@@ -233,21 +221,12 @@ final class ErrorManager implements ErrorManagerInterface
         return $this;
     }
 
+    /** @param class-string<ErrorReporterInterface> $reporter */
     public function addReporter(string $reporter): static
     {
         $this->customReporters[] = $reporter;
 
         return $this;
-    }
-
-    public function bypassConsoleExceptions(bool $on = true): void
-    {
-        $this->bypassConsoleExceptions = $on;
-    }
-
-    public function isBypassingConsoleExceptions(): bool
-    {
-        return $this->bypassConsoleExceptions;
     }
 
     // ------------------------------------------------------------------ internals
@@ -302,12 +281,10 @@ final class ErrorManager implements ErrorManagerInterface
     /** @return list<class-string> */
     private function reporters(): array
     {
-        // F-22a: NU se cache-uiește pe instanță — singleton-ul trăiește cât procesul MCP, iar lock-ul se schimbă în același proces.
-        if (\Isaidgitmenow\LaravelErrors\Mcp\ReporterMock::isActive()) {
-            return [];
-        }
+        /** @var list<class-string> $configured  validat la boot (ErrorsServiceProvider::validateConfiguration) */
+        $configured = array_values((array) $this->cfg('reporters', []));
 
-        return array_merge($this->customReporters, (array) $this->cfg('reporters', []));
+        return array_merge($this->customReporters, $configured);
     }
 
     private function contextName(?ContextDetectorInterface $detector): string

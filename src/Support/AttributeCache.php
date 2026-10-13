@@ -24,7 +24,7 @@ final class AttributeCache
     /** @var array<class-string, array<string, mixed>>|null */
     private ?array $classes = null;
 
-    /** @var array<class-string, array<string, mixed>> */
+    /** @var array<string, array<string, mixed>>  memo pentru clase necunoscute (vendor) */
     private array $runtime = [];
 
     public function __construct(
@@ -38,10 +38,10 @@ final class AttributeCache
     /** @return array<string, mixed> */
     public function for(string $class): array
     {
-        $this->load();
+        $classes = $this->classes();
 
-        if (isset($this->classes[$class])) {
-            return $this->classes[$class];
+        if (isset($classes[$class])) {
+            return $classes[$class];
         }
 
         // Un atribut invalid pe o clasă necunoscută (vendor) aruncă din newInstance(). Suntem în calea de eroare:
@@ -62,10 +62,9 @@ final class AttributeCache
      */
     public function classesWith(string ...$anyOf): array
     {
-        $this->load();
         $out = [];
 
-        foreach ($this->classes as $class => $data) {
+        foreach ($this->classes() as $class => $data) {
             foreach ($anyOf as $key) {
                 if (array_key_exists($key, $data)) {
                     $out[] = $class;
@@ -80,9 +79,7 @@ final class AttributeCache
     /** @return array<class-string, array<string, mixed>> */
     public function all(): array
     {
-        $this->load();
-
-        return $this->classes;
+        return $this->classes();
     }
 
     public function flushRuntime(): void
@@ -90,21 +87,22 @@ final class AttributeCache
         $this->runtime = [];
     }
 
-    private function load(): void
+    /** @return array<class-string, array<string, mixed>> */
+    private function classes(): array
     {
-        if ($this->classes !== null) {
-            return;
-        }
+        return $this->classes ??= $this->load();
+    }
 
+    /** @return array<class-string, array<string, mixed>> */
+    private function load(): array
+    {
         $file = $this->app->bootstrapPath('cache/errors.php');
 
         if (is_file($file)) {
             $cached = require $file;
 
             if (is_array($cached) && ($cached['version'] ?? null) === self::VERSION) {
-                $this->classes = $cached['classes'] ?? [];
-
-                return;
+                return (array) ($cached['classes'] ?? []);
             }
 
             $stale = true;
@@ -120,9 +118,7 @@ final class AttributeCache
                 );
             }
 
-            $this->classes = [];
-
-            return;
+            return [];
         }
 
         // non-producție: scanare memoizată pe mtime; dacă store-ul e picat, scanăm nememoizat — nu murim în calea de eroare
@@ -130,10 +126,11 @@ final class AttributeCache
         $key   = 'laravel-errors:scan:' . md5(implode('|', $paths) . ':' . $this->scanner->latestMtime($paths));
 
         try {
-            $this->classes = $this->store->rememberForever($key, fn () => $this->scanner->scan($paths));
+            return $this->store->rememberForever($key, fn () => $this->scanner->scan($paths));
         } catch (\Throwable $failure) {
             CriticalLog::once('laravel-errors: attribute scan could not be memoized', $failure);
-            $this->classes = $this->scanner->scan($paths);
+
+            return $this->scanner->scan($paths);
         }
     }
 }

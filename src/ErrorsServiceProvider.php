@@ -17,7 +17,6 @@ use Isaidgitmenow\LaravelErrors\Console\Commands\MakeDddErrorCommand;
 use Isaidgitmenow\LaravelErrors\Console\Commands\MakeExceptionCommand;
 use Isaidgitmenow\LaravelErrors\Contracts\ErrorManagerInterface;
 use Isaidgitmenow\LaravelErrors\Exceptions\InvalidConfigurationException;
-use Isaidgitmenow\LaravelErrors\Mcp\Commands\ErrorsMcpCommand;
 use Isaidgitmenow\LaravelErrors\Support\AttributeCache;
 use Isaidgitmenow\LaravelErrors\Support\AttributedExceptionMapper;
 use Isaidgitmenow\LaravelErrors\Support\CallableResolver;
@@ -39,7 +38,6 @@ class ErrorsServiceProvider extends PackageServiceProvider
             ->hasCommands(
                 MakeExceptionCommand::class,
                 MakeDddErrorCommand::class,
-                ErrorsMcpCommand::class,
                 CacheErrorsCommand::class,
                 ClearErrorsCacheCommand::class,
                 DoctorCommand::class,
@@ -111,7 +109,7 @@ class ErrorsServiceProvider extends PackageServiceProvider
 
         // Încălzire: o eroare de cache (lipsă/stale în producție) trebuie să iasă AICI, nu în afterResolving(Handler),
         // unde ar înlocui excepția reală pe care Laravel o tratează.
-        if (in_array(true, (array) $this->app['config']->get('errors.integrate_with_laravel', []), true)) {
+        if (in_array(true, (array) ($this->errorsConfig()['integrate_with_laravel'] ?? []), true)) {
             $this->app->make(AttributeCache::class)->all();
         }
 
@@ -139,10 +137,16 @@ class ErrorsServiceProvider extends PackageServiceProvider
         }
     }
 
+    /** @return array<string, mixed> */
+    private function errorsConfig(): array
+    {
+        return (array) $this->app->make(Repository::class)->get('errors', []);
+    }
+
     /** §1.2 regula 3: erorile de configurare explodează la boot, nu tac în producție. */
     private function validateConfiguration(): void
     {
-        $c = (array) $this->app['config']->get('errors', []);
+        $c = $this->errorsConfig();
 
         $enum = static function (string $key, mixed $value, array $allowed): void {
             if (! in_array($value, $allowed, true)) {

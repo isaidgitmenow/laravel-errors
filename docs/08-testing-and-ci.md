@@ -73,7 +73,7 @@ composer phpstan
 vendor/bin/phpstan analyse --memory-limit=512M
 ```
 
-The configuration targets `src/` at **PHPStan level 5** with the Larastan extension loaded for Laravel-aware type inference. It pre-suppresses errors from optional dependencies (`Debugbar`, `Filament`) that may not be installed in your dev environment.
+The configuration targets `src/` at **PHPStan level 8** with the Larastan extension loaded for Laravel-aware type inference. It pre-suppresses errors from optional dependencies (`Debugbar`, `Filament`) that may not be installed in your dev environment.
 
 ### Installing Larastan in Your Application
 

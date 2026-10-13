@@ -30,7 +30,11 @@ final class AuditReporter implements ErrorReporterInterface, BypassesRateLimitin
 
     public function report(Throwable $e): bool
     {
-        $audit  = ExceptionInspector::audit($e);
+        $audit = ExceptionInspector::audit($e);
+        if ($audit === null) {
+            return true;
+        }
+
         $origin = ExceptionInspector::origin($e);
 
         $record = new AuditRecord(

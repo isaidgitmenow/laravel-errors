@@ -111,6 +111,12 @@ final class AttributeReader
         return $data;
     }
 
+    /**
+     * @template T of object
+     * @param  ReflectionClass<object> $ref
+     * @param  class-string<T>         $attribute
+     * @return \ReflectionAttribute<T>|null
+     */
     private function first(ReflectionClass $ref, string $attribute): ?\ReflectionAttribute
     {
         $attrs = $ref->getAttributes($attribute);

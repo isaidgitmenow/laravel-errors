@@ -67,12 +67,14 @@ final class ErrorHandler
 
         // 3. Nivelul de log. Pe familia de wrapper-e (o singură dată, indiferent câte clase există)
         //    și pe clasele nemapate din cache.
-        foreach (AttributedHttpException::levelMap() as $psr => $wrapperClass) {
+        $levels = AttributedHttpException::levelMap();
+        foreach ($levels as $psr => $wrapperClass) {
             $exceptions->level($wrapperClass, $psr);
         }
         foreach ($cache->all() as $class => $data) {
             $level = $data['log_as'] ?? self::derivedLevel($data);
-            if ($level !== null) {
+            if (is_string($level) && isset($levels[$level]) && is_subclass_of($class, Throwable::class)) {
+                /** @var 'debug'|'info'|'notice'|'warning'|'error'|'critical'|'alert'|'emergency' $level  validat prin isset($levels[$level]) */
                 $exceptions->level($class, $level);
             }
         }

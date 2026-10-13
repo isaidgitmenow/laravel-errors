@@ -2,7 +2,7 @@ includes:
     - vendor/larastan/larastan/extension.neon
 
 parameters:
-    level: 5
+    level: 8
     paths:
         - src
 
@@ -13,6 +13,9 @@ parameters:
     phpVersion: 80400
 
     ignoreErrors:
+        # Level 6+ annotation completeness (array value types / generics) — tracked separately.
+        - identifier: missingType.iterableValue
+        - identifier: missingType.generics
         # Optional dependencies not installed during dev/CI
         - message: '#on an unknown class Barryvdh\\Debugbar\\#'
           reportUnmatched: false

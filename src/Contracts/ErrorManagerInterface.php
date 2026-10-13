@@ -19,12 +19,15 @@ interface ErrorManagerInterface
 
     public function isPassThrough(Throwable $e): bool;
 
+    /** @param class-string<Throwable> $exceptionClass */
     public function addPassThrough(string $exceptionClass): void;
 
+    /**
+     * @param class-string<ContextDetectorInterface>   $detector
+     * @param class-string<ExceptionRendererInterface> $renderer
+     */
     public function addContext(string $detector, string $renderer): static;
 
+    /** @param class-string<ErrorReporterInterface> $reporter */
     public function addReporter(string $reporter): static;
-
-    public function bypassConsoleExceptions(bool $on = true): void;
-    public function isBypassingConsoleExceptions(): bool;
 }

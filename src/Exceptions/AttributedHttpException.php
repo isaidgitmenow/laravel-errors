@@ -48,9 +48,14 @@ abstract class AttributedHttpException extends \RuntimeException implements Http
         // Originalul poate declara report(SomeService $s) → îl apelăm tot prin container, nu direct.
         // Dacă originalul nu are report(), întoarcem false ca să nu oprim nimic.
         // Reflector::isCallable, nu method_exists: un report() protected/private ar face container->call() să arunce.
-        return \Illuminate\Support\Reflector::isCallable([$this->original, 'report'])
-            ? app()->call([$this->original, 'report'])
-            : false;
+        if (! \Illuminate\Support\Reflector::isCallable([$this->original, 'report'])) {
+            return false;
+        }
+
+        /** @var callable $report */
+        $report = [$this->original, 'report'];
+
+        return app()->call($report);
     }
 
     public function render(mixed $request): mixed
@@ -64,7 +69,7 @@ abstract class AttributedHttpException extends \RuntimeException implements Http
         return self::levelMap()[$psrLevel] ?? ErrorAttributedHttpException::class;
     }
 
-    /** @return array<string, class-string<self>>  PSR-3 → clasă, pentru înregistrarea level() */
+    /** @return array<'debug'|'info'|'notice'|'warning'|'error'|'critical'|'alert'|'emergency', class-string<self>>  PSR-3 → clasă, pentru înregistrarea level() */
     public static function levelMap(): array
     {
         return [
